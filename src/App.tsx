@@ -3,17 +3,35 @@ import Board from './components/Board';
 import useGame from './hooks/useGame';
 import Notation from './components/Notation';
 import LichessImport from './components/LichessImport';
-import { Database, FileText, Settings, Play, Save, FolderOpen, Download } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 
 function App() {
   const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove } = useGame();
   
   const [engineOutput, setEngineOutput] = useState<string[]>([]);
   const [currentView, setCurrentView] = useState<'board' | 'lichess'>('board');
+  const [enginePath, setEnginePath] = useState<string | null>(null);
+  const [engineDisplayName, setEngineDisplayName] = useState<string>('');
 
+  // Load engine path on startup
   useEffect(() => {
-    // Listen for engine output
+    if (window.electronAPI) {
+      window.electronAPI.getEnginePath().then(fullPath => {
+        setEnginePath(fullPath);
+        if (fullPath) {
+          window.electronAPI.getBasename(fullPath).then(basename => {
+            setEngineDisplayName(basename);
+          });
+        } else {
+            setEngineDisplayName('');
+        }
+      });
+    }
+  }, []);
+
+  // Listen for engine output
+  useEffect(() => {
     if (window.electronAPI) {
       window.electronAPI.onEngineAnalysisUpdate((output) => {
         setEngineOutput(prev => [...prev.slice(-19), output]); // Keep last 20 lines
@@ -24,7 +42,7 @@ function App() {
   const handleMove = (orig: string, dest: string) => {
     move(orig, dest);
     // Request engine analysis for the new position (simplified for now)
-    if (window.electronAPI) {
+    if (window.electronAPI && enginePath) { // Only send command if engine path is set
       window.electronAPI.sendUciCommand(`position fen ${fen}`);
       window.electronAPI.sendUciCommand('go depth 10');
     }
@@ -36,6 +54,20 @@ function App() {
       // In a real app, we'd load the game here
     }
   };
+
+  const handleSelectEngine = useCallback(async () => {
+    if (window.electronAPI) {
+      const fullPath = await window.electronAPI.selectEngine();
+      if (fullPath) {
+        setEnginePath(fullPath);
+        const basename = await window.electronAPI.getBasename(fullPath);
+        setEngineDisplayName(basename);
+      } else {
+        setEnginePath(null);
+        setEngineDisplayName('');
+      }
+    }
+  }, []);
 
   const handleLichessImport = (pgn: string) => {
     console.log('Imported PGN length:', pgn.length);
@@ -86,10 +118,19 @@ function App() {
                   <button onClick={handleOpenFile} className="p-2 hover:bg-white/10 rounded" title="Open PGN">
                     <FolderOpen size={20} />
                   </button>
+                   <button onClick={handleSelectEngine} className="p-2 hover:bg-white/10 rounded" title="Select Engine">
+                    <Cpu size={20} />
+                  </button>
                    <button className="p-2 hover:bg-white/10 rounded" title="Settings">
                     <Settings size={20} />
                   </button>
                </div>
+               {enginePath && (
+                 <p className="mt-2 text-xs text-gray-500 text-center truncate" title={enginePath}>Engine: {engineDisplayName}</p>
+               )}
+               {!enginePath && (
+                 <p className="mt-2 text-xs text-red-500 text-center">No engine selected. Click CPU icon to select.</p>
+               )}
             </div>
           </div>
         }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
-import type { LichessGameFilter } from '../global';
+import type { LichessGameFilter } from '../../electron/lichess/LichessService';
 
 interface LichessImportProps {
   onImport: (pgn: string) => void;

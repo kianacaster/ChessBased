@@ -26,6 +26,7 @@ export class LichessService {
     if (filters.opening !== undefined) params.append('opening', filters.opening.toString());
 
     const url = `${this.baseUrl}/games/user/${username}?${params.toString()}`;
+    console.log('Fetching Lichess games from URL:', url); // Added for debugging
 
     try {
       const response = await fetch(url, {

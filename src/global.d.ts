@@ -1,5 +1,5 @@
 // src/global.d.ts
-import { GameHeader } from '../electron/db/Database'; // Import GameHeader
+import type { GameHeader } from '../electron/db/Database';
 
 export interface LichessGameFilter {
   max?: number;
@@ -22,6 +22,9 @@ export interface IElectronAPI {
   onEngineAnalysisUpdate: (callback: (output: string) => void) => void;
   getGameHeaders: () => Promise<GameHeader[]>;
   fetchLichessGames: (username: string, filters: LichessGameFilter) => Promise<string>;
+  selectEngine: () => Promise<string | null>;
+  getEnginePath: () => Promise<string | null>;
+  getBasename: (filePath: string) => Promise<string>;
 }
 
 declare global {
