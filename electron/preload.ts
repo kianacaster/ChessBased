@@ -3,7 +3,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Example exposition
   setTitle: (title: string) => ipcRenderer.send('set-title', title),
   openPgnFile: () => ipcRenderer.invoke('open-pgn-file'),
   savePgnFile: (pgnContent: string) => ipcRenderer.invoke('save-pgn-file', pgnContent),
@@ -15,4 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   getGameHeaders: () => ipcRenderer.invoke('get-game-headers'),
   fetchLichessGames: (username: string, filters: any) => ipcRenderer.invoke('fetch-lichess-games', username, filters),
+  selectEngine: () => ipcRenderer.invoke('select-engine'),
+  getEnginePath: () => ipcRenderer.invoke('get-engine-path'),
+  getBasename: (filePath: string) => ipcRenderer.invoke('get-basename', filePath),
 });

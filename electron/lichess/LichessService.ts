@@ -29,11 +29,16 @@ export class LichessService {
     console.log('Fetching Lichess games from URL:', url); // Added for debugging
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
+
       const response = await fetch(url, {
         headers: {
           'Accept': 'application/x-chess-pgn'
-        }
+        },
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`Lichess API error: ${response.status} ${response.statusText}`);
