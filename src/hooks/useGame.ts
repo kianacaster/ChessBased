@@ -3,20 +3,13 @@ import { Chess } from 'chessops/chess';
 import { parseUci } from 'chessops/util';
 import { chessgroundDests as toDests } from 'chessops/compat';
 import { makeFen } from 'chessops/fen';
-import { makeSan } from 'chessops/san';
-import type { NormalMove } from 'chessops/types';
-
-export interface MoveData {
-  uci: string;
-  san: string;
-}
+import type { NormalMove } from 'chessops/types'; // Removed Move
 
 interface UseGameResult {
   fen: string;
-  turn: 'white' | 'black';
   move: (orig: string, dest: string) => boolean;
   dests: Map<string, string[]>;
-  history: MoveData[];
+  history: string[];
   currentMoveIndex: number;
   jumpToMove: (index: number) => void;
 }
@@ -24,16 +17,15 @@ interface UseGameResult {
 const useGame = (): UseGameResult => {
   const chessRef = useRef<Chess>(Chess.default());
   const [fen, setFen] = useState<string>(makeFen(chessRef.current.toSetup()));
-  const [turn, setTurn] = useState<'white' | 'black'>('white');
   const [dests, setDests] = useState<Map<string, string[]>>(() => toDests(chessRef.current));
-  const [history, setHistory] = useState<MoveData[]>([]);
+  const [history, setHistory] = useState<string[]>([]);
   const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(-1); // -1 for initial position
 
   const applyMove = useCallback((orig: string, dest: string): boolean => {
     const uciMove = parseUci(orig + dest);
     if (!uciMove) return false;
 
-    // Ensure it's a NormalMove
+    // Ensure it's a NormalMove (chessground doesn't do drops directly yet)
     if (!('from' in uciMove) || !('to' in uciMove)) {
       return false;
     }
@@ -48,21 +40,20 @@ const useGame = (): UseGameResult => {
       return false;
     }
 
+    // Check if the destination is in the legal moves for the origin square
     const moveExists = legalDestsForOrigSquare.has(normalMove.to);
 
     if (moveExists) {
+      // If we are not at the end of the history, truncate it
       if (currentMoveIndex < history.length - 1) {
         setHistory((prev) => prev.slice(0, currentMoveIndex + 1));
       }
       
-      const san = makeSan(chessRef.current, normalMove);
-      
       chessRef.current.play(normalMove);
       const newFen = makeFen(chessRef.current.toSetup());
       setFen(newFen);
-      setTurn(chessRef.current.turn);
       setDests(toDests(chessRef.current));
-      setHistory((prev) => [...prev, { uci: orig + dest, san }]);
+      setHistory((prev) => [...prev, orig + dest]);
       setCurrentMoveIndex((prev) => prev + 1);
       return true;
     }
@@ -74,10 +65,10 @@ const useGame = (): UseGameResult => {
 
     setCurrentMoveIndex(index);
     const newChess = Chess.default();
-    
+    // Replay moves up to the selected index
     for (let i = 0; i <= index; i++) {
       if (history[i]) {
-        const move = parseUci(history[i].uci);
+        const move = parseUci(history[i]);
         if (move) {
           newChess.play(move);
         } else {
@@ -88,11 +79,10 @@ const useGame = (): UseGameResult => {
     }
     chessRef.current = newChess;
     setFen(makeFen(newChess.toSetup()));
-    setTurn(newChess.turn);
     setDests(toDests(newChess));
   }, [history]);
 
-  return { fen, turn, move: applyMove, dests, history, currentMoveIndex, jumpToMove };
+  return { fen, move: applyMove, dests, history, currentMoveIndex, jumpToMove };
 };
 
 export default useGame;
