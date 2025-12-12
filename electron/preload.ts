@@ -14,4 +14,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('engine-analysis-update', (event, output) => callback(output));
   },
   getGameHeaders: () => ipcRenderer.invoke('get-game-headers'),
+  fetchLichessGames: (username: string, filters: any) => ipcRenderer.invoke('fetch-lichess-games', username, filters),
 });

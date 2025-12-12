@@ -4,15 +4,16 @@ import { Chessground } from 'chessground';
 // import { Key } from 'chessground/dist/types'; // Temporarily removed
 import 'chessground/assets/chessground.base.css';
 import 'chessground/assets/chessground.brown.css';
-import 'chessground/assets/chessground.dark.css';
+import 'chessground/assets/chessground.cburnett.css';
 
 interface BoardProps {
   fen?: string;
+  turn?: 'white' | 'black';
   onMove?: (orig: string, dest: string) => void;
   dests: Map<string, string[]>;
 }
 
-const Board: React.FC<BoardProps> = ({ fen = 'start', onMove, dests }) => {
+const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, dests }) => {
   const cgRef = useRef<any | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
 
@@ -22,7 +23,7 @@ const Board: React.FC<BoardProps> = ({ fen = 'start', onMove, dests }) => {
         fen: fen,
         movable: {
           free: false,
-          color: 'white', // Can be dynamic later
+          color: turn,
           dests: dests,
           showDests: true,
         },
@@ -47,9 +48,9 @@ const Board: React.FC<BoardProps> = ({ fen = 'start', onMove, dests }) => {
 
   useEffect(() => {
     if (cgRef.current) {
-      cgRef.current.set({ fen, movable: { dests } });
+      cgRef.current.set({ fen, movable: { dests, color: turn } });
     }
-  }, [fen, dests]);
+  }, [fen, dests, turn]);
 
   return <div ref={elementRef} style={{ width: '100%', height: '100%' }} />;
 };
