@@ -1,0 +1,17 @@
+// See the Electron documentation for details on how to use preload scripts:
+// https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
+import { contextBridge, ipcRenderer } from 'electron';
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  // Example exposition
+  setTitle: (title: string) => ipcRenderer.send('set-title', title),
+  openPgnFile: () => ipcRenderer.invoke('open-pgn-file'),
+  savePgnFile: (pgnContent: string) => ipcRenderer.invoke('save-pgn-file', pgnContent),
+  startEngine: () => ipcRenderer.invoke('start-engine'),
+  stopEngine: () => ipcRenderer.invoke('stop-engine'),
+  sendUciCommand: (command: string) => ipcRenderer.invoke('send-uci-command', command),
+  onEngineAnalysisUpdate: (callback: (output: string) => void) => {
+    ipcRenderer.on('engine-analysis-update', (event, output) => callback(output));
+  },
+  getGameHeaders: () => ipcRenderer.invoke('get-game-headers'),
+});
