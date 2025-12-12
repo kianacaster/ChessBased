@@ -3,6 +3,7 @@ import Board from './components/Board';
 import useGame from './hooks/useGame';
 import Notation from './components/Notation';
 import LichessImport from './components/LichessImport';
+import EngineManager from './components/EngineManager'; // Import EngineManager
 import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -10,7 +11,7 @@ function App() {
   const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove } = useGame();
   
   const [engineOutput, setEngineOutput] = useState<string[]>([]);
-  const [currentView, setCurrentView] = useState<'board' | 'lichess'>('board');
+  const [currentView, setCurrentView] = useState<'board' | 'lichess' | 'engineManager'>('board'); // Add 'engineManager' view
   const [enginePath, setEnginePath] = useState<string | null>(null);
   const [engineDisplayName, setEngineDisplayName] = useState<string>('');
 
@@ -55,18 +56,15 @@ function App() {
     }
   };
 
-  const handleSelectEngine = useCallback(async () => {
-    if (window.electronAPI) {
-      const fullPath = await window.electronAPI.selectEngine();
-      if (fullPath) {
-        setEnginePath(fullPath);
-        const basename = await window.electronAPI.getBasename(fullPath);
-        setEngineDisplayName(basename);
-      } else {
-        setEnginePath(null);
-        setEngineDisplayName('');
-      }
+  const handleEngineSelected = useCallback(async (path: string | null) => {
+    setEnginePath(path);
+    if (path) {
+      const basename = await window.electronAPI.getBasename(path);
+      setEngineDisplayName(basename);
+    } else {
+      setEngineDisplayName('');
     }
+    setCurrentView('board'); // Go back to board view after selection
   }, []);
 
   const handleLichessImport = (pgn: string) => {
@@ -74,6 +72,13 @@ function App() {
     // Here we could load the games list or the first game
     setCurrentView('board');
   };
+
+  const triggerManualEngineSelection = useCallback(async () => {
+    if (window.electronAPI) {
+      const fullPath = await window.electronAPI.selectEngine();
+      handleEngineSelected(fullPath); // Use the existing handler to update state
+    }
+  }, [handleEngineSelected]);
 
   return (
     <div className="flex h-screen w-screen bg-[#161512] text-[#c0c0c0] overflow-hidden">
@@ -111,6 +116,13 @@ function App() {
                 <Download className="w-4 h-4" />
                 <span>Import from Lichess</span>
               </button>
+              <button 
+                onClick={() => setCurrentView('engineManager')}
+                className={`w-full text-left px-4 py-2 hover:bg-white/5 flex items-center space-x-3 text-sm transition-colors ${currentView === 'engineManager' ? 'bg-white/10 text-white' : ''}`}
+              >
+                <Cpu className="w-4 h-4" />
+                <span>Engine Manager</span>
+              </button>
             </div>
 
             <div className="p-4 border-t border-gray-700">
@@ -118,7 +130,7 @@ function App() {
                   <button onClick={handleOpenFile} className="p-2 hover:bg-white/10 rounded" title="Open PGN">
                     <FolderOpen size={20} />
                   </button>
-                   <button onClick={handleSelectEngine} className="p-2 hover:bg-white/10 rounded" title="Select Engine">
+                   <button onClick={triggerManualEngineSelection} className="p-2 hover:bg-white/10 rounded" title="Select Engine">
                     <Cpu size={20} />
                   </button>
                    <button className="p-2 hover:bg-white/10 rounded" title="Settings">
@@ -129,7 +141,7 @@ function App() {
                  <p className="mt-2 text-xs text-gray-500 text-center truncate" title={enginePath}>Engine: {engineDisplayName}</p>
                )}
                {!enginePath && (
-                 <p className="mt-2 text-xs text-red-500 text-center">No engine selected. Click CPU icon to select.</p>
+                 <p className="mt-2 text-xs text-red-500 text-center">No engine selected. Click Engine Manager or CPU icon to select.</p>
                )}
             </div>
           </div>
@@ -139,6 +151,8 @@ function App() {
             <div className="flex flex-col h-full bg-[#302e2c]">
               <LichessImport onImport={handleLichessImport} />
             </div>
+          ) : currentView === 'engineManager' ? (
+            <EngineManager onEngineSelected={handleEngineSelected} currentEnginePath={enginePath} />
           ) : (
             <div className="flex flex-col h-full bg-[#302e2c]">
              <div className="w-full bg-[#262421] px-4 py-2 flex items-center justify-between border-b border-[#3e3c39] shadow-sm z-10">

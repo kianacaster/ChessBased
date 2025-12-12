@@ -16,6 +16,7 @@
     "dist": "electron-builder"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "chessground": "^9.2.1",
     "chessops": "^0.15.0",
     "clsx": "^2.1.1",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@tailwindcss/postcss": "^4.1.18",
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "^24.10.3",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

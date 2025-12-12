@@ -17,4 +17,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectEngine: () => ipcRenderer.invoke('select-engine'),
   getEnginePath: () => ipcRenderer.invoke('get-engine-path'),
   getBasename: (filePath: string) => ipcRenderer.invoke('get-basename', filePath),
+  getAvailableEngines: () => ipcRenderer.invoke('get-available-engines'),
+  downloadEngine: (engineId: string) => ipcRenderer.invoke('download-engine', engineId),
+  onEngineDownloadProgress: (callback: (data: { engineId: string, progress: number }) => void) => {
+    ipcRenderer.on('engine-download-progress', (event, data) => callback(data));
+  },
+  onEngineDownloadStatus: (callback: (data: { engineId: string, status: string }) => void) => {
+    ipcRenderer.on('engine-download-status', (event, data) => callback(data));
+  },
+  onEngineDownloadError: (callback: (data: { engineId: string, error: string }) => void) => {
+    ipcRenderer.on('engine-download-error', (event, data) => callback(data));
+  },
 });

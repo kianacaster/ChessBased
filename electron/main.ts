@@ -5,6 +5,8 @@ import { UciEngine } from './engine/UciEngine';
 import { GameDatabase, GameHeader } from './db/Database';
 import { LichessService, LichessGameFilter } from './lichess/LichessService';
 import { loadConfig, saveConfig } from './config';
+import { EngineDownloader } from './engines/EngineDownloader'; // Import EngineDownloader
+import { AVAILABLE_ENGINES, EngineMetadata } from './engines/engine-metadata'; // Import AVAILABLE_ENGINES
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -15,6 +17,7 @@ let mainWindow: BrowserWindow | null = null;
 let uciEngine: UciEngine;
 let gameDatabase: GameDatabase;
 let lichessService: LichessService;
+let engineDownloader: EngineDownloader; // Declare engineDownloader
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -52,6 +55,7 @@ app.on('ready', () => {
 
   gameDatabase = new GameDatabase();
   lichessService = new LichessService();
+  engineDownloader = EngineDownloader.getInstance(); // Initialize EngineDownloader
 });
 
 ipcMain.handle('fetch-lichess-games', async (event, username: string, filters: LichessGameFilter) => {
@@ -78,7 +82,7 @@ ipcMain.handle('open-pgn-file', async () => {
       gameDatabase.clearGames();
       await gameDatabase.extractHeadersFromPgn(content);
       return content;
-    } catch (error) {
+    }  catch (error) {
       console.error('Failed to read PGN file:', error);
       return null;
     }
@@ -169,6 +173,45 @@ ipcMain.handle('get-engine-path', () => {
 
 ipcMain.handle('get-basename', (event, filePath: string) => {
   return path.basename(filePath);
+});
+
+ipcMain.handle('get-available-engines', (): EngineMetadata[] => {
+  return AVAILABLE_ENGINES;
+});
+
+ipcMain.handle('download-engine', async (event, engineId: string) => {
+  if (!mainWindow) return null;
+
+  try {
+    const downloadedPath = await engineDownloader.downloadAndExtract(
+      engineId,
+      (progress) => {
+        mainWindow?.webContents.send('engine-download-progress', { engineId, progress });
+      },
+      (status) => {
+        mainWindow?.webContents.send('engine-download-status', { engineId, status });
+      }
+    );
+
+    if (downloadedPath) {
+      saveConfig({ enginePath: downloadedPath }); // Automatically set as active
+      // Restart engine with new path
+      uciEngine.stop();
+      uciEngine = new UciEngine({
+        path: downloadedPath,
+        onOutput: (output: string) => {
+          if (mainWindow) {
+            mainWindow.webContents.send('engine-analysis-update', output);
+          }
+        }
+      });
+    }
+    return downloadedPath;
+  } catch (error) {
+    console.error(`Error downloading engine ${engineId}:`, error);
+    mainWindow?.webContents.send('engine-download-error', { engineId, error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
 });
 
 app.on('window-all-closed', () => {

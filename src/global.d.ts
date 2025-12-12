@@ -1,5 +1,6 @@
 // src/global.d.ts
 import type { GameHeader } from '../electron/db/Database';
+import type { EngineMetadata } from '../electron/engines/engine-metadata';
 
 export interface LichessGameFilter {
   max?: number;
@@ -25,6 +26,11 @@ export interface IElectronAPI {
   selectEngine: () => Promise<string | null>;
   getEnginePath: () => Promise<string | null>;
   getBasename: (filePath: string) => Promise<string>;
+  getAvailableEngines: () => Promise<EngineMetadata[]>;
+  downloadEngine: (engineId: string) => Promise<string | null>;
+  onEngineDownloadProgress: (callback: (data: { engineId: string, progress: number }) => void) => void;
+  onEngineDownloadStatus: (callback: (data: { engineId: string, status: string }) => void) => void;
+  onEngineDownloadError: (callback: (data: { engineId: string, error: string }) => void) => void;
 }
 
 declare global {
