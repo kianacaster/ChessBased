@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs/promises'; // Import fs.promises for async file operations
 import { UciEngine } from './engine/UciEngine'; // Import UciEngine
 import { GameDatabase, GameHeader } from './db/Database'; // Import GameDatabase and GameHeader
+import { LichessService, LichessGameFilter } from './lichess/LichessService';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -12,6 +13,7 @@ if (require('electron-squirrel-startup')) {
 let mainWindow: BrowserWindow | null = null;
 let uciEngine: UciEngine; // Declare uciEngine here
 let gameDatabase: GameDatabase; // Declare gameDatabase here
+let lichessService: LichessService;
 
 const createWindow = () => {
   // Create the browser window.
@@ -52,9 +54,22 @@ app.on('ready', () => {
 
   // Initialize GameDatabase after mainWindow is created
   gameDatabase = new GameDatabase();
+  lichessService = new LichessService();
 });
 
 // IPC Handlers
+ipcMain.handle('fetch-lichess-games', async (event, username: string, filters: LichessGameFilter) => {
+  try {
+    const pgn = await lichessService.fetchUserGames(username, filters);
+    gameDatabase.clearGames();
+    await gameDatabase.extractHeadersFromPgn(pgn);
+    return pgn;
+  } catch (error) {
+    console.error('IPC fetch-lichess-games error:', error);
+    throw error;
+  }
+});
+
 ipcMain.handle('open-pgn-file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
