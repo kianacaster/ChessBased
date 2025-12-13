@@ -7,7 +7,7 @@ import https from 'https';
 import { platform, arch } from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { AVAILABLE_ENGINES, isEngineArchived } from './engine-metadata';
+import { AVAILABLE_ENGINES, isEngineArchived } from './engine-metadata'; // Updated import
 import type { EngineMetadata } from './engine-types';
 import AdmZip from 'adm-zip'; // For unzipping .zip files
 

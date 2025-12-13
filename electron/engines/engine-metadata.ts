@@ -1,5 +1,6 @@
-import { platform } from 'os';
+import { platform, arch } from 'os';
 import type { EngineMetadata } from './engine-types';
+export type { EngineMetadata };
 
 const STOCKFISH_VERSION = '16';
 
@@ -17,7 +18,7 @@ export const AVAILABLE_ENGINES: EngineMetadata[] = [
       'darwin-x64': 'stockfish-macos-x86-64-avx2\\.tar',
       'darwin-arm64': 'stockfish-macos-m1-apple-silicon\\.tar',
     },
-    executableName: platform() === 'win32' ? 'stockfish-windows-x86-64-avx2.exe' : 'stockfish', // Simplified for now, logic needs to be robust
+    executableName: platform() === 'win32' ? 'stockfish-windows-x86-64-avx2.exe' : 'stockfish',
     isArchived: true,
   },
 ];
@@ -25,9 +26,6 @@ export const AVAILABLE_ENGINES: EngineMetadata[] = [
 export function getEngineDownloadUrlFromMetadata(engineId: string): string | undefined {
   const engine = AVAILABLE_ENGINES.find(e => e.id === engineId);
   if (!engine) return undefined;
-
-  // Placeholder for direct download URLs if we ever use them again
-  // For now, these are not used as we will fetch from GitHub API
   return undefined; 
 }
 

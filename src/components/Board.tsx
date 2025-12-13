@@ -1,7 +1,5 @@
 import React, { useRef, useEffect } from 'react';
 import { Chessground } from 'chessground';
-// import { Config } from 'chessground/dist/config'; // Temporarily removed
-// import { Key } from 'chessground/dist/types'; // Temporarily removed
 import 'chessground/assets/chessground.base.css';
 import 'chessground/assets/chessground.brown.css';
 import 'chessground/assets/chessground.cburnett.css';
@@ -32,7 +30,7 @@ const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, de
 
   useEffect(() => {
     if (elementRef.current) {
-      const config: any = { // Temporarily using any for Config
+      const config: any = {
         fen: fen,
         movable: {
           free: false,
@@ -47,7 +45,7 @@ const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, de
           shapes: shapes,
         },
         events: {
-          move: (orig: any, dest: any) => { // Temporarily using any for Key
+          move: (orig: any, dest: any) => {
             if (onMoveRef.current) {
                onMoveRef.current(orig, dest);
             }
