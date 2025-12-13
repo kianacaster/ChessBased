@@ -75,30 +75,19 @@ export class UciEngine {
     }
   }
 
-  public sendUciCommand(command: string): Promise<string | void> {
-    return new Promise((resolve) => {
+  public sendUciCommand(command: string): Promise<void> {
+    return new Promise((resolve, reject) => {
       if (!this.engineProcess) {
         console.error('Engine not started.');
-        return resolve();
+        return reject(new Error('Engine not started'));
       }
-      const handler = (line: string) => {
-        if (line === 'readyok' || line.startsWith('bestmove')) { // Basic response for now
-          this.engineProcess?.stdout.removeListener('data', onData);
-          resolve(line);
-        }
-      };
-      const onData = (data: Buffer) => {
-        this.dataBuffer += data.toString();
-        let newlineIndex;
-        while ((newlineIndex = this.dataBuffer.indexOf('\n')) >= 0) {
-          const line = this.dataBuffer.substring(0, newlineIndex).trim();
-          this.dataBuffer = this.dataBuffer.substring(newlineIndex + 1);
-          handler(line);
-        }
-      };
-      this.engineProcess.stdout.on('data', onData);
-      this.engineProcess.stdin.write(`${command}\n`);
-      console.log(`Sent to engine: ${command}`);
+      try {
+        this.engineProcess.stdin.write(`${command}\n`);
+        console.log(`Sent to engine: ${command}`);
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
     });
   }
 

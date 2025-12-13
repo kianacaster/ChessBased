@@ -4,10 +4,10 @@ import useGame from './hooks/useGame';
 import Notation from './components/Notation';
 import LichessImport from './components/LichessImport';
 import EngineManager from './components/EngineManager';
-import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity } from 'lucide-react';
+import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp } from 'lucide-react';
 import * as React from 'react';
 import { clsx } from 'clsx';
-import { parseUciInfo, EngineInfo } from './utils/engine';
+import { parseUciInfo, type EngineInfo } from './utils/engine';
 
 function App() {
   const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode } = useGame();
@@ -15,6 +15,7 @@ function App() {
   // Engine State
   const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
   const [isEngineRunning, setIsEngineRunning] = React.useState(false);
+  const [isDeepAnalysis, setIsDeepAnalysis] = React.useState(false);
   const [engineOutput, setEngineOutput] = React.useState<string[]>([]); // Keep raw output for debug if needed
 
   const [currentView, setCurrentView] = React.useState<'board' | 'lichess' | 'engineManager'>('board');
@@ -52,30 +53,34 @@ function App() {
     }
   }, []);
 
+  // React to FEN changes or Engine status changes to update analysis
+  React.useEffect(() => {
+    if (isEngineRunning && enginePath && window.electronAPI) {
+      window.electronAPI.startEngine().then(() => {
+        window.electronAPI.sendUciCommand('stop');
+        window.electronAPI.sendUciCommand(`position fen ${fen}`);
+        window.electronAPI.sendUciCommand(isDeepAnalysis ? 'go infinite' : 'go depth 20');
+      });
+    }
+  }, [fen, isEngineRunning, enginePath, isDeepAnalysis]);
+
   const handleMove = (orig: string, dest: string) => {
     move(orig, dest);
-    // Request engine analysis for the new position
-    if (window.electronAPI && enginePath) {
-       // If engine is already running, just update position. 
-       // If we want to ensure it analyzes the new position, we might stop then go.
-       if (isEngineRunning) {
-         window.electronAPI.sendUciCommand('stop');
-       }
-       window.electronAPI.sendUciCommand(`position fen ${fen}`);
-       window.electronAPI.sendUciCommand('go depth 20');
-       setIsEngineRunning(true);
+  };
+
+  const toggleEngine = async () => {
+    if (!window.electronAPI || !enginePath) return;
+
+    if (isEngineRunning) {
+      await window.electronAPI.sendUciCommand('stop');
+      setIsEngineRunning(false);
+    } else {
+      setIsEngineRunning(true);
     }
   };
 
-  const toggleEngine = () => {
-    if (isEngineRunning) {
-      window.electronAPI?.sendUciCommand('stop');
-      setIsEngineRunning(false);
-    } else {
-      window.electronAPI?.sendUciCommand(`position fen ${fen}`);
-      window.electronAPI?.sendUciCommand('go depth 20');
-      setIsEngineRunning(true);
-    }
+  const toggleDeepAnalysis = () => {
+    setIsDeepAnalysis(!isDeepAnalysis);
   };
 
   const handleOpenFile = async () => {
@@ -318,7 +323,19 @@ function App() {
                              : `#${engineInfo.score.value}`}
                          </span>
                          <div className="flex flex-col text-xs text-muted-foreground">
-                            <span>Depth {engineInfo.depth}/{engineInfo.seldepth}</span>
+                            <div className="flex items-center space-x-1">
+                               <span>Depth {engineInfo.depth}/{engineInfo.seldepth}</span>
+                               <button 
+                                 onClick={toggleDeepAnalysis}
+                                 className={clsx(
+                                   "p-0.5 rounded transition-colors hover:bg-muted-foreground/20",
+                                   isDeepAnalysis ? "text-primary" : "text-muted-foreground"
+                                 )}
+                                 title={isDeepAnalysis ? "Disable Deep Analysis" : "Enable Deep Analysis (Infinite)"}
+                               >
+                                 <ChevronsUp size={14} />
+                               </button>
+                            </div>
                             <span>{Math.round(engineInfo.nps / 1000)}k nodes/s</span>
                          </div>
                        </div>
@@ -326,7 +343,7 @@ function App() {
                        <div className="space-y-1">
                           <div className="text-[10px] uppercase text-muted-foreground font-bold mb-1">Best Line</div>
                           <div className="text-sm leading-relaxed text-foreground/90 break-words">
-                            {engineInfo.pv.map((move, i) => (
+                            {engineInfo.pv && engineInfo.pv.map((move, i) => (
                               <span key={i} className={clsx(
                                 "inline-block mr-1.5",
                                 i === 0 ? "text-blue-400 font-bold" : ""
