@@ -4,18 +4,10 @@ import useGame from './hooks/useGame';
 import Notation from './components/Notation';
 import LichessImport from './components/LichessImport';
 import EngineManager from './components/EngineManager';
-<<<<<<< HEAD
-import { Database, FileText, Settings, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity } from 'lucide-react';
-import * as React from 'react';
-import { clsx } from 'clsx';
-import { parseUciInfo } from './utils/engine';
-import type { EngineInfo } from './utils/engine';
-=======
 import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity } from 'lucide-react';
 import * as React from 'react';
 import { clsx } from 'clsx';
 import { parseUciInfo, EngineInfo } from './utils/engine';
->>>>>>> feature/engine-analysis-ui
 
 function App() {
   const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode } = useGame();
@@ -23,10 +15,7 @@ function App() {
   // Engine State
   const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
   const [isEngineRunning, setIsEngineRunning] = React.useState(false);
-<<<<<<< HEAD
-=======
   const [engineOutput, setEngineOutput] = React.useState<string[]>([]); // Keep raw output for debug if needed
->>>>>>> feature/engine-analysis-ui
 
   const [currentView, setCurrentView] = React.useState<'board' | 'lichess' | 'engineManager'>('board');
   const [enginePath, setEnginePath] = React.useState<string | null>(null);
@@ -57,11 +46,8 @@ function App() {
         if (info) {
           setEngineInfo(info);
         }
-<<<<<<< HEAD
-=======
         // Also keep raw log for now
         setEngineOutput(prev => [...prev.slice(-19), output]);
->>>>>>> feature/engine-analysis-ui
       });
     }
   }, []);
