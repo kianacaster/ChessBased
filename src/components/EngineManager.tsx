@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import type { EngineMetadata } from '../../electron/engines/engine-metadata';
+import type { EngineMetadata } from '../../electron/engines/engine-types';
 import { Download, Loader2, Cpu } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -66,75 +66,87 @@ const EngineManager: React.FC<EngineManagerProps> = ({ onEngineSelected, current
   }, [onEngineSelected]);
 
   return (
-    <div className="flex flex-col h-full bg-[#302e2c] text-gray-200 p-6 overflow-y-auto">
-      <h2 className="text-2xl font-bold mb-6 text-gray-100 flex items-center space-x-2">
-        <Cpu className="w-7 h-7" />
-        <span>Engine Manager</span>
-      </h2>
+    <div className="flex flex-col h-full bg-background text-foreground p-8 overflow-y-auto">
+      <div className="max-w-4xl mx-auto w-full">
+        <h2 className="text-3xl font-bold mb-8 text-foreground flex items-center space-x-3 tracking-tight">
+          <Cpu className="w-8 h-8 text-primary" />
+          <span>Engine Manager</span>
+        </h2>
 
-      <div className="mb-8">
-        <h3 className="text-xl font-semibold mb-3">Current Engine</h3>
-        <div className="bg-[#262421] p-4 rounded-lg flex items-center justify-between shadow-md border border-[#3e3c39]">
-          <p className="text-lg truncate">
-            {currentEnginePath ? `Selected: ${currentEnginePath}` : 'No engine selected'}
-          </p>
-          <button
-            onClick={handleManualSelect}
-            className="ml-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white font-medium transition-colors"
-          >
-            Select Manually
-          </button>
-        </div>
-      </div>
-
-      <h3 className="text-xl font-semibold mb-3">Download & Install Engines</h3>
-      {loadingEngines ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-          <span className="ml-3 text-lg">Loading available engines...</span>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {availableEngines.map(engine => (
-            <div key={engine.id} className="bg-[#262421] p-4 rounded-lg shadow-md border border-[#3e3c39]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-lg font-semibold">{engine.name} (v{engine.version})</h4>
-                  <p className="text-sm text-gray-400">{engine.description}</p>
-                </div>
-                <button
-                  onClick={() => handleDownload(engine.id)}
-                  disabled={downloadProgress[engine.id] !== undefined && downloadProgress[engine.id] < 100}
-                  className={clsx(
-                    "px-4 py-2 rounded-md text-white font-medium transition-colors flex items-center space-x-2",
-                    downloadProgress[engine.id] !== undefined && downloadProgress[engine.id] < 100
-                      ? "bg-gray-500 cursor-not-allowed"
-                      : "bg-green-600 hover:bg-green-700"
-                  )}
-                >
-                  {downloadProgress[engine.id] !== undefined && downloadProgress[engine.id] < 100 ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>{downloadProgress[engine.id]}%</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4" />
-                      <span>Download</span>
-                    </>
-                  )}
-                </button>
-              </div>
-              {downloadStatus[engine.id] && (
-                <p className="mt-2 text-sm text-gray-400">{downloadStatus[engine.id]}</p>
-              )}
-              {downloadError[engine.id] && (
-                <p className="mt-2 text-sm text-red-500">Error: {downloadError[engine.id]}</p>
-              )}
+        <div className="mb-10">
+          <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide text-xs">Active Engine</h3>
+          <div className="bg-card p-6 rounded-lg flex items-center justify-between shadow-sm border border-border">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-muted-foreground mb-1">Current Path</span>
+              <p className="text-base font-mono bg-muted/50 px-3 py-1.5 rounded text-foreground truncate max-w-xl">
+                {currentEnginePath || 'No engine selected'}
+              </p>
             </div>
-          ))}
+            <button
+              onClick={handleManualSelect}
+              className="ml-4 px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-md font-medium transition-colors text-sm"
+            >
+              Select Manually
+            </button>
+          </div>
         </div>
-      )}
+
+        <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide text-xs">Available for Download</h3>
+        {loadingEngines ? (
+          <div className="flex items-center justify-center py-12 text-muted-foreground">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <span className="ml-3 text-sm font-medium">Loading catalog...</span>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {availableEngines.map(engine => (
+              <div key={engine.id} className="bg-card p-6 rounded-lg shadow-sm border border-border hover:border-primary/50 transition-colors">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground flex items-center">
+                      {engine.name} 
+                      <span className="ml-2 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-mono">v{engine.version}</span>
+                    </h4>
+                    <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{engine.description}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDownload(engine.id)}
+                    disabled={downloadProgress[engine.id] !== undefined && downloadProgress[engine.id] < 100}
+                    className={clsx(
+                      "px-4 py-2 rounded-md font-medium transition-colors flex items-center space-x-2 text-sm",
+                      downloadProgress[engine.id] !== undefined && downloadProgress[engine.id] < 100
+                        ? "bg-muted text-muted-foreground cursor-not-allowed"
+                        : "bg-primary text-primary-foreground hover:bg-primary/90"
+                    )}
+                  >
+                    {downloadProgress[engine.id] !== undefined && downloadProgress[engine.id] < 100 ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>{downloadProgress[engine.id]}%</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        <span>Download</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {(downloadStatus[engine.id] || downloadError[engine.id]) && (
+                  <div className="mt-4 pt-4 border-t border-border">
+                     {downloadStatus[engine.id] && (
+                        <p className="text-xs text-muted-foreground font-mono">{downloadStatus[engine.id]}</p>
+                      )}
+                      {downloadError[engine.id] && (
+                        <p className="text-xs text-destructive font-bold mt-1">Error: {downloadError[engine.id]}</p>
+                      )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 // src/global.d.ts
 import type { GameHeader } from '../electron/db/Database';
-import type { EngineMetadata } from '../electron/engines/engine-metadata';
+import type { EngineMetadata } from '../electron/engines/engine-types';
 
 export interface LichessGameFilter {
   max?: number;

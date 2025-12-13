@@ -6,7 +6,8 @@ import { GameDatabase, GameHeader } from './db/Database';
 import { LichessService, LichessGameFilter } from './lichess/LichessService';
 import { loadConfig, saveConfig } from './config';
 import { EngineDownloader } from './engines/EngineDownloader'; // Import EngineDownloader
-import { AVAILABLE_ENGINES, EngineMetadata } from './engines/engine-metadata'; // Import AVAILABLE_ENGINES
+import { AVAILABLE_ENGINES } from './engines/engine-metadata';
+import type { EngineMetadata } from './engines/engine-types';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {

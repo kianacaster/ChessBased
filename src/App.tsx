@@ -3,20 +3,26 @@ import Board from './components/Board';
 import useGame from './hooks/useGame';
 import Notation from './components/Notation';
 import LichessImport from './components/LichessImport';
-import EngineManager from './components/EngineManager'; // Import EngineManager
-import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import EngineManager from './components/EngineManager';
+import { Database, FileText, Settings, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity } from 'lucide-react';
+import * as React from 'react';
+import { clsx } from 'clsx';
+import { parseUciInfo } from './utils/engine';
+import type { EngineInfo } from './utils/engine';
 
 function App() {
-  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove } = useGame();
+  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode } = useGame();
   
-  const [engineOutput, setEngineOutput] = useState<string[]>([]);
-  const [currentView, setCurrentView] = useState<'board' | 'lichess' | 'engineManager'>('board'); // Add 'engineManager' view
-  const [enginePath, setEnginePath] = useState<string | null>(null);
-  const [engineDisplayName, setEngineDisplayName] = useState<string>('');
+  // Engine State
+  const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
+  const [isEngineRunning, setIsEngineRunning] = React.useState(false);
+
+  const [currentView, setCurrentView] = React.useState<'board' | 'lichess' | 'engineManager'>('board');
+  const [enginePath, setEnginePath] = React.useState<string | null>(null);
+  const [engineDisplayName, setEngineDisplayName] = React.useState<string>('');
 
   // Load engine path on startup
-  useEffect(() => {
+  React.useEffect(() => {
     if (window.electronAPI) {
       window.electronAPI.getEnginePath().then(fullPath => {
         setEnginePath(fullPath);
@@ -32,31 +38,51 @@ function App() {
   }, []);
 
   // Listen for engine output
-  useEffect(() => {
+  React.useEffect(() => {
     if (window.electronAPI) {
       window.electronAPI.onEngineAnalysisUpdate((output) => {
-        setEngineOutput(prev => [...prev.slice(-19), output]); // Keep last 20 lines
+        // Parse info
+        const info = parseUciInfo(output);
+        if (info) {
+          setEngineInfo(info);
+        }
       });
     }
   }, []);
 
   const handleMove = (orig: string, dest: string) => {
     move(orig, dest);
-    // Request engine analysis for the new position (simplified for now)
-    if (window.electronAPI && enginePath) { // Only send command if engine path is set
-      window.electronAPI.sendUciCommand(`position fen ${fen}`);
-      window.electronAPI.sendUciCommand('go depth 10');
+    // Request engine analysis for the new position
+    if (window.electronAPI && enginePath) {
+       // If engine is already running, just update position. 
+       // If we want to ensure it analyzes the new position, we might stop then go.
+       if (isEngineRunning) {
+         window.electronAPI.sendUciCommand('stop');
+       }
+       window.electronAPI.sendUciCommand(`position fen ${fen}`);
+       window.electronAPI.sendUciCommand('go depth 20');
+       setIsEngineRunning(true);
+    }
+  };
+
+  const toggleEngine = () => {
+    if (isEngineRunning) {
+      window.electronAPI?.sendUciCommand('stop');
+      setIsEngineRunning(false);
+    } else {
+      window.electronAPI?.sendUciCommand(`position fen ${fen}`);
+      window.electronAPI?.sendUciCommand('go depth 20');
+      setIsEngineRunning(true);
     }
   };
 
   const handleOpenFile = async () => {
     if (window.electronAPI) {
       await window.electronAPI.openPgnFile();
-      // In a real app, we'd load the game here
     }
   };
 
-  const handleEngineSelected = useCallback(async (path: string | null) => {
+  const handleEngineSelected = React.useCallback(async (path: string | null) => {
     setEnginePath(path);
     if (path) {
       const basename = await window.electronAPI.getBasename(path);
@@ -64,133 +90,251 @@ function App() {
     } else {
       setEngineDisplayName('');
     }
-    setCurrentView('board'); // Go back to board view after selection
+    setCurrentView('board');
   }, []);
 
   const handleLichessImport = (pgn: string) => {
     console.log('Imported PGN length:', pgn.length);
-    // Here we could load the games list or the first game
     setCurrentView('board');
   };
 
-  const triggerManualEngineSelection = useCallback(async () => {
+  const triggerManualEngineSelection = React.useCallback(async () => {
     if (window.electronAPI) {
       const fullPath = await window.electronAPI.selectEngine();
-      handleEngineSelected(fullPath); // Use the existing handler to update state
+      handleEngineSelected(fullPath);
     }
   }, [handleEngineSelected]);
 
+  // Compute shapes for best move arrow
+  const shapes = React.useMemo(() => {
+    if (!engineInfo || !engineInfo.pv || engineInfo.pv.length === 0) return [];
+    const bestMove = engineInfo.pv[0];
+    if (bestMove.length < 4) return [];
+    
+    return [{
+      orig: bestMove.substring(0, 2),
+      dest: bestMove.substring(2, 4),
+      brush: 'blue' // or 'green'
+    }];
+  }, [engineInfo]);
+
+  const SidebarItem = ({ 
+    icon: Icon, 
+    label, 
+    active = false, 
+    onClick 
+  }: { 
+    icon: React.ElementType, 
+    label: string, 
+    active?: boolean, 
+    onClick?: () => void 
+  }) => (
+    <button 
+      onClick={onClick}
+      className={clsx(
+        "w-full text-left px-3 py-2 rounded-md flex items-center space-x-3 text-sm font-medium transition-all duration-200 group",
+        active 
+          ? "bg-primary/10 text-primary" 
+          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+      )}
+    >
+      <Icon className={clsx("w-4 h-4", active ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")} />
+      <span>{label}</span>
+    </button>
+  );
+
   return (
-    <div className="flex h-screen w-screen bg-[#161512] text-[#c0c0c0] overflow-hidden">
+    <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden font-sans">
       <Layout
         sidebar={
-          <div className="flex flex-col h-full bg-[#262421]">
-            <div className="p-4 border-b border-gray-700 flex items-center space-x-2">
-              <Database className="w-6 h-6 text-blue-500" />
-              <h1 className="text-xl font-bold text-gray-200 tracking-tight">ChessBased</h1>
+          <div className="flex flex-col h-full bg-sidebar">
+            <div className="p-6 pb-2">
+              <div className="flex items-center space-x-2 mb-6">
+                <div className="p-1.5 bg-primary rounded-lg">
+                  <Database className="w-5 h-5 text-primary-foreground" />
+                </div>
+                <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground">ChessBased</h1>
+              </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto py-2">
-              <div className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase">Library</div>
-              <button 
-                onClick={() => setCurrentView('board')}
-                className={`w-full text-left px-4 py-2 hover:bg-white/5 flex items-center space-x-3 text-sm transition-colors ${currentView === 'board' ? 'bg-white/10 text-white' : ''}`}
-              >
-                <FolderOpen className="w-4 h-4" />
-                <span>My Games</span>
-              </button>
-              <button className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center space-x-3 text-sm transition-colors">
-                <FileText className="w-4 h-4" />
-                <span>Grandmaster DB</span>
-              </button>
-              <button className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center space-x-3 text-sm transition-colors">
-                <Save className="w-4 h-4" />
-                <span>Saved Analysis</span>
-              </button>
+            <div className="flex-1 overflow-y-auto px-4 space-y-6">
+              <div>
+                <div className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Library</div>
+                <div className="space-y-1">
+                  <SidebarItem 
+                    icon={LayoutDashboard} 
+                    label="My Games" 
+                    active={currentView === 'board'}
+                    onClick={() => setCurrentView('board')}
+                  />
+                  <SidebarItem icon={FileText} label="Grandmaster DB" />
+                  <SidebarItem icon={Save} label="Saved Analysis" />
+                </div>
+              </div>
               
-              <div className="px-3 mt-4 mb-2 text-xs font-semibold text-gray-500 uppercase">Tools</div>
-              <button 
-                onClick={() => setCurrentView('lichess')}
-                className={`w-full text-left px-4 py-2 hover:bg-white/5 flex items-center space-x-3 text-sm transition-colors ${currentView === 'lichess' ? 'bg-white/10 text-white' : ''}`}
-              >
-                <Download className="w-4 h-4" />
-                <span>Import from Lichess</span>
-              </button>
-              <button 
-                onClick={() => setCurrentView('engineManager')}
-                className={`w-full text-left px-4 py-2 hover:bg-white/5 flex items-center space-x-3 text-sm transition-colors ${currentView === 'engineManager' ? 'bg-white/10 text-white' : ''}`}
-              >
-                <Cpu className="w-4 h-4" />
-                <span>Engine Manager</span>
-              </button>
+              <div>
+                <div className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tools</div>
+                <div className="space-y-1">
+                  <SidebarItem 
+                    icon={Download} 
+                    label="Import from Lichess" 
+                    active={currentView === 'lichess'}
+                    onClick={() => setCurrentView('lichess')}
+                  />
+                  <SidebarItem 
+                    icon={Cpu} 
+                    label="Engine Manager" 
+                    active={currentView === 'engineManager'}
+                    onClick={() => setCurrentView('engineManager')}
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="p-4 border-t border-gray-700">
-               <div className="flex space-x-2 justify-center">
-                  <button onClick={handleOpenFile} className="p-2 hover:bg-white/10 rounded" title="Open PGN">
-                    <FolderOpen size={20} />
+            <div className="p-4 border-t border-sidebar-border bg-sidebar">
+               <div className="flex items-center justify-between mb-3 px-2">
+                  <span className="text-xs font-medium text-muted-foreground">Quick Actions</span>
+               </div>
+               <div className="grid grid-cols-3 gap-2">
+                  <button onClick={handleOpenFile} className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-accent-foreground transition-colors" title="Open PGN">
+                    <FolderOpen size={18} />
+                    <span className="text-[10px] mt-1">Open</span>
                   </button>
-                   <button onClick={triggerManualEngineSelection} className="p-2 hover:bg-white/10 rounded" title="Select Engine">
-                    <Cpu size={20} />
+                   <button onClick={triggerManualEngineSelection} className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-accent-foreground transition-colors" title="Select Engine">
+                    <Cpu size={18} />
+                    <span className="text-[10px] mt-1">Engine</span>
                   </button>
-                   <button className="p-2 hover:bg-white/10 rounded" title="Settings">
-                    <Settings size={20} />
+                   <button className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-accent-foreground transition-colors" title="Settings">
+                    <Settings size={18} />
+                    <span className="text-[10px] mt-1">Settings</span>
                   </button>
                </div>
-               {enginePath && (
-                 <p className="mt-2 text-xs text-gray-500 text-center truncate" title={enginePath}>Engine: {engineDisplayName}</p>
-               )}
-               {!enginePath && (
-                 <p className="mt-2 text-xs text-red-500 text-center">No engine selected. Click Engine Manager or CPU icon to select.</p>
-               )}
+               
+               <div className="mt-4 px-2 py-2 bg-black/20 rounded border border-sidebar-border/50">
+                 <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 overflow-hidden">
+                       <div className={clsx("w-2 h-2 rounded-full shrink-0", enginePath ? "bg-green-500" : "bg-red-500")} />
+                       <span className="text-xs text-muted-foreground truncate font-medium">
+                         {enginePath ? engineDisplayName : 'No Engine'}
+                       </span>
+                    </div>
+                 </div>
+               </div>
             </div>
           </div>
         }
         main={
           currentView === 'lichess' ? (
-            <div className="flex flex-col h-full bg-[#302e2c]">
+            <div className="flex flex-col h-full bg-background">
               <LichessImport onImport={handleLichessImport} />
             </div>
           ) : currentView === 'engineManager' ? (
             <EngineManager onEngineSelected={handleEngineSelected} currentEnginePath={enginePath} />
           ) : (
-            <div className="flex flex-col h-full bg-[#302e2c]">
-             <div className="w-full bg-[#262421] px-4 py-2 flex items-center justify-between border-b border-[#3e3c39] shadow-sm z-10">
-                <div className="flex items-center space-x-4">
-                  <div className="text-sm font-medium text-gray-300">White Player vs Black Player</div>
-                  <div className="text-xs text-gray-500">Event Name • 2024</div>
+            <div className="flex flex-col h-full bg-background relative">
+             <div className="absolute top-0 left-0 w-full h-16 bg-gradient-to-b from-background to-transparent z-0 pointer-events-none" />
+             
+             <div className="w-full px-6 py-4 flex items-center justify-between z-10">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">White Player vs Black Player</h2>
+                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center space-x-2">
+                     <span>Event Name</span>
+                     <span className="w-1 h-1 rounded-full bg-muted-foreground/50" />
+                     <span>2024</span>
+                  </div>
                 </div>
                 <div className="flex space-x-2">
                    {/* Board controls could go here */}
                 </div>
              </div>
              
-            <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
-              <div className="w-full max-w-[80vh] aspect-square shadow-2xl rounded-sm overflow-hidden border-8 border-[#262421]">
-                <Board fen={fen} turn={turn} onMove={handleMove} dests={dests} />
+            <div className="flex-1 flex items-center justify-center p-6 overflow-hidden">
+              <div className="relative w-full max-w-[80vh] aspect-square shadow-2xl rounded-sm overflow-hidden ring-1 ring-border/50">
+                <Board fen={fen} turn={turn} onMove={handleMove} dests={dests} shapes={shapes} />
               </div>
             </div>
           </div>
           )
         }
         analysis={
-          <div className="flex flex-col h-full bg-[#262421]">
-             <div className="flex-1 overflow-hidden">
-                <Notation history={history} currentMoveIndex={currentMoveIndex} onMoveClick={jumpToMove} />
+          <div className="flex flex-col h-full bg-sidebar border-l border-sidebar-border">
+             <div className="flex-1 overflow-hidden flex flex-col">
+                <div className="px-4 py-3 border-b border-sidebar-border flex items-center justify-between bg-sidebar">
+                  <div className="flex items-center space-x-2 text-sm font-semibold text-foreground">
+                    <History size={16} className="text-muted-foreground" />
+                    <span>Moves</span>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  <Notation 
+                    history={history} 
+                    currentMoveIndex={currentMoveIndex} 
+                    onMoveClick={jumpToMove}
+                    nodes={nodes}
+                    currentNodeId={currentNode.id}
+                    onNodeClick={goToNode} 
+                  />
+                </div>
              </div>
              
-             <div className="h-1/3 border-t border-gray-700 bg-[#1e1d1b] flex flex-col">
-                <div className="px-2 py-1 bg-[#2b2926] text-xs font-bold text-gray-400 border-b border-gray-700 flex justify-between items-center">
-                   <span>ENGINE ANALYSIS</span>
-                   <button className="hover:text-white" onClick={() => window.electronAPI?.startEngine()}>
-                      <Play size={12} />
+             <div className="h-1/3 border-t border-sidebar-border bg-sidebar flex flex-col">
+                <div className="px-4 py-2 bg-sidebar-accent/30 border-b border-sidebar-border flex justify-between items-center">
+                   <div className="flex items-center space-x-2">
+                      <Activity size={14} className={isEngineRunning ? "text-green-500 animate-pulse" : "text-muted-foreground"} />
+                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Engine Analysis</span>
+                   </div>
+                   <button 
+                      className={clsx(
+                        "text-xs px-2 py-0.5 rounded transition-colors border",
+                        isEngineRunning 
+                          ? "border-red-500/50 text-red-400 hover:bg-red-500/10" 
+                          : "border-green-500/50 text-green-400 hover:bg-green-500/10"
+                      )}
+                      onClick={toggleEngine}
+                   >
+                      {isEngineRunning ? 'Stop' : 'Start'}
                    </button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-2 font-mono text-xs text-green-400">
-                   {engineOutput.length === 0 ? (
-                     <span className="text-gray-600">Engine idle...</span>
+                
+                <div className="flex-1 overflow-y-auto p-4 font-mono text-xs">
+                   {!engineInfo ? (
+                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground/50 italic space-y-2">
+                       <Cpu size={24} />
+                       <span>{isEngineRunning ? 'Calculating...' : 'Engine idle'}</span>
+                     </div>
                    ) : (
-                     engineOutput.map((line, i) => <div key={i}>{line}</div>)
+                     <div className="space-y-4">
+                       <div className="flex items-baseline space-x-4 pb-2 border-b border-sidebar-border/50">
+                         <span className={clsx(
+                           "text-2xl font-bold",
+                           engineInfo.score.unit === 'mate' 
+                             ? "text-pink-500" 
+                             : (engineInfo.score.value > 0 ? "text-green-400" : (engineInfo.score.value < 0 ? "text-red-400" : "text-gray-400"))
+                         )}>
+                           {engineInfo.score.unit === 'cp' 
+                             ? (engineInfo.score.value / 100).toFixed(2) 
+                             : `#${engineInfo.score.value}`}
+                         </span>
+                         <div className="flex flex-col text-xs text-muted-foreground">
+                            <span>Depth {engineInfo.depth}/{engineInfo.seldepth}</span>
+                            <span>{Math.round(engineInfo.nps / 1000)}k nodes/s</span>
+                         </div>
+                       </div>
+                       
+                       <div className="space-y-1">
+                          <div className="text-[10px] uppercase text-muted-foreground font-bold mb-1">Best Line</div>
+                          <div className="text-sm leading-relaxed text-foreground/90 break-words">
+                            {engineInfo.pv.map((move, i) => (
+                              <span key={i} className={clsx(
+                                "inline-block mr-1.5",
+                                i === 0 ? "text-blue-400 font-bold" : ""
+                              )}>
+                                {move}
+                              </span>
+                            ))}
+                          </div>
+                       </div>
+                     </div>
                    )}
                 </div>
              </div>
