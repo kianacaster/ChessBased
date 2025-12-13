@@ -22,7 +22,7 @@ A modern, free, open-source chess database and analysis application built with E
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/yourusername/chessbased.git
+    git clone https://github.com/kianacaster/chessbased.git
     cd chessbased
     ```
 
