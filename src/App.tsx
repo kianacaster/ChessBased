@@ -9,8 +9,35 @@ import * as React from 'react';
 import { clsx } from 'clsx';
 import { parseUciInfo, type EngineInfo } from './utils/engine';
 
+interface SidebarItemProps {
+  icon: React.ElementType;
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}
+
+const SidebarItem = ({ 
+  icon: Icon, 
+  label, 
+  active = false, 
+  onClick 
+}: SidebarItemProps) => (
+  <button 
+    onClick={onClick}
+    className={clsx(
+      "w-full text-left px-3 py-2 rounded-md flex items-center space-x-3 text-sm font-medium transition-all duration-200 group",
+      active 
+        ? "bg-primary/10 text-primary" 
+        : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+    )}
+  >
+    <Icon className={clsx("w-4 h-4", active ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")} />
+    <span>{label}</span>
+  </button>
+);
+
 function App() {
-  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode } = useGame();
+  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove } = useGame();
   
   // Engine State
   const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
@@ -125,31 +152,6 @@ function App() {
     }];
   }, [engineInfo]);
 
-  const SidebarItem = ({ 
-    icon: Icon, 
-    label, 
-    active = false, 
-    onClick 
-  }: { 
-    icon: React.ElementType, 
-    label: string, 
-    active?: boolean, 
-    onClick?: () => void 
-  }) => (
-    <button 
-      onClick={onClick}
-      className={clsx(
-        "w-full text-left px-3 py-2 rounded-md flex items-center space-x-3 text-sm font-medium transition-all duration-200 group",
-        active 
-          ? "bg-primary/10 text-primary" 
-          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-      )}
-    >
-      <Icon className={clsx("w-4 h-4", active ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")} />
-      <span>{label}</span>
-    </button>
-  );
-
   return (
     <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden font-sans">
       <Layout
@@ -257,7 +259,7 @@ function App() {
              
             <div className="flex-1 flex items-center justify-center p-6 overflow-hidden">
               <div className="relative w-full max-w-[80vh] aspect-square shadow-2xl rounded-sm overflow-hidden ring-1 ring-border/50">
-                <Board fen={fen} turn={turn} onMove={handleMove} dests={dests} shapes={shapes} />
+                <Board fen={fen} turn={turn} onMove={handleMove} dests={dests} shapes={shapes} lastMove={lastMove} />
               </div>
             </div>
           </div>

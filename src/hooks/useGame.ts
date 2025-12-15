@@ -101,7 +101,10 @@ const useGame = (): UseGameResult => {
   const move = useCallback((orig: string, dest: string): boolean => {
     const uciString = orig + dest;
     const uciMove = parseUci(uciString);
-    if (!uciMove) return false;
+    if (!uciMove) {
+        console.warn('Invalid UCI:', uciString);
+        return false;
+    }
     
     if (!('from' in uciMove) || !('to' in uciMove)) return false; 
     
@@ -109,7 +112,10 @@ const useGame = (): UseGameResult => {
     const legalDests = toDests(tempChess);
     const movesFromOrig = legalDests.get(orig as any);
     
-    if (!movesFromOrig?.includes(dest as any)) return false;
+    if (!movesFromOrig?.includes(dest as any)) {
+        console.warn('Illegal move:', uciString, 'FEN:', chess.toSetup());
+        return false;
+    }
 
     // Check if this move already exists in children
     const existingChildId = currentNode.children.find(childId => {
@@ -118,6 +124,7 @@ const useGame = (): UseGameResult => {
     });
 
     if (existingChildId) {
+      console.log('Move exists, jumping to:', existingChildId);
       setCurrentNodeId(existingChildId);
       return true;
     }
@@ -137,6 +144,8 @@ const useGame = (): UseGameResult => {
       parentId: currentNodeId,
       comments: []
     };
+
+    console.log('Creating new node:', newNodeId, 'for move:', san);
 
     setNodes(prev => {
       const parent = prev[currentNodeId];
@@ -172,6 +181,13 @@ const useGame = (): UseGameResult => {
     }
   }, [nodes]);
 
+  const lastMove = useMemo(() => {
+    if (currentNode.move?.uci) {
+      return [currentNode.move.uci.substring(0, 2), currentNode.move.uci.substring(2, 4)];
+    }
+    return undefined;
+  }, [currentNode]);
+
   return { 
     fen: currentNode.fen, 
     turn, 
@@ -182,7 +198,8 @@ const useGame = (): UseGameResult => {
     jumpToMove,
     nodes,
     currentNode,
-    goToNode
+    goToNode,
+    lastMove
   };
 };
 

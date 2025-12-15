@@ -16,9 +16,10 @@ interface BoardProps {
   onMove?: (orig: string, dest: string) => void;
   dests: Map<string, string[]>;
   shapes?: Shape[];
+  lastMove?: string[];
 }
 
-const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, dests, shapes = [] }) => {
+const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, dests, shapes = [], lastMove }) => {
   const cgRef = useRef<any | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const onMoveRef = useRef(onMove);
@@ -34,7 +35,7 @@ const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, de
         fen: fen,
         movable: {
           free: false,
-          color: turn,
+          color: 'both',
           dests: dests,
           showDests: true,
         },
@@ -44,6 +45,7 @@ const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, de
         drawable: {
           shapes: shapes,
         },
+        lastMove: lastMove, 
         events: {
           move: (orig: any, dest: any) => {
             if (onMoveRef.current) {
@@ -66,11 +68,12 @@ const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, de
     if (cgRef.current) {
       cgRef.current.set({ 
         fen, 
-        movable: { dests, color: turn },
-        drawable: { shapes } 
+        movable: { dests, color: 'both' },
+        drawable: { shapes },
+        lastMove: lastMove 
       });
     }
-  }, [fen, dests, turn, shapes]);
+  }, [fen, dests, turn, shapes, lastMove]);
 
   return <div ref={elementRef} style={{ width: '100%', height: '100%' }} />;
 };

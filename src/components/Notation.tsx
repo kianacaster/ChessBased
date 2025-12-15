@@ -40,6 +40,17 @@ const Notation: React.FC<NotationProps> = ({
 
     return (
       <div ref={scrollRef} className={twMerge("flex flex-col h-full overflow-y-auto bg-background text-foreground p-2", className)}>
+         <div 
+           className={twMerge(
+             "flex items-center px-2 py-1.5 cursor-pointer transition-colors rounded-sm mb-1",
+             currentNodeId === rootId
+               ? "bg-primary/20 text-foreground" 
+               : "text-muted-foreground hover:bg-muted hover:text-foreground"
+           )}
+           onClick={() => onNodeClick(rootId)}
+         >
+           <span className="font-semibold text-xs uppercase tracking-wider">Game Start</span>
+         </div>
          <div className="text-sm font-medium leading-6 break-words">
            <RecursiveTree 
              nodeId={rootId} 
@@ -145,6 +156,8 @@ const RecursiveTree: React.FC<{
         return (
           <div key={childId} className="flex flex-col">
             <div 
+              data-node-id={childId}
+              data-active={currentNodeId === childId}
               className={twMerge(
                 "flex items-center px-2 py-1.5 cursor-pointer transition-colors border-l-2 rounded-r-sm",
                 currentNodeId === childId 
