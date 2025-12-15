@@ -28,4 +28,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onEngineDownloadError: (callback: (data: { engineId: string, error: string }) => void) => {
     ipcRenderer.on('engine-download-error', (event, data) => callback(data));
   },
+
+  // Database & Persistent Lichess
+  lichessDownloadBackground: (username: string, filters: any) => ipcRenderer.invoke('lichess-download-background', username, filters),
+  onLichessDownloadComplete: (callback: (db: any) => void) => {
+    ipcRenderer.on('lichess-download-complete', (event, db) => callback(db));
+  },
+  onLichessDownloadError: (callback: (data: { id: string, error: string }) => void) => {
+    ipcRenderer.on('lichess-download-error', (event, data) => callback(data));
+  },
+  
+  dbGetList: () => ipcRenderer.invoke('db-get-list'),
+  dbCreate: (name: string) => ipcRenderer.invoke('db-create', name),
+  dbImport: () => ipcRenderer.invoke('db-import'),
+  dbLoadGames: (id: string) => ipcRenderer.invoke('db-load-games', id),
+  dbAddGame: (id: string, pgn: string) => ipcRenderer.invoke('db-add-game', id, pgn),
 });

@@ -3,7 +3,7 @@ import { Chess } from 'chessops/chess';
 import { parseUci } from 'chessops/util';
 import { chessgroundDests as toDests } from 'chessops/compat';
 import { makeFen, parseFen } from 'chessops/fen';
-import { makeSan } from 'chessops/san';
+import { makeSan, parseSan } from 'chessops/san';
 import type { NormalMove } from 'chessops/types';
 import type { TreeNode } from '../types/chess';
 
@@ -20,10 +20,12 @@ interface UseGameResult {
   history: MoveData[];
   currentMoveIndex: number;
   jumpToMove: (index: number) => void;
+  loadPgn: (pgn: string) => void;
   // Tree API
   nodes: Record<string, TreeNode>;
   currentNode: TreeNode;
   goToNode: (id: string) => void;
+  lastMove?: [string, string];
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 10);
@@ -45,13 +47,12 @@ const useGame = (): UseGameResult => {
   });
   
   // Initialize rootId and currentNodeId based on the initial nodes
-  const [rootId] = useState(() => Object.keys(nodes)[0]);
+  const [rootId, setRootId] = useState(() => Object.keys(nodes)[0]);
   const [currentNodeId, setCurrentNodeId] = useState(() => Object.keys(nodes)[0]);
 
   useEffect(() => {
-    console.log('Current Node ID:', currentNodeId);
-    console.log('Nodes count:', Object.keys(nodes).length);
-  }, [currentNodeId, nodes]);
+    // console.log('Current Node ID:', currentNodeId);
+  }, [currentNodeId]);
 
   // Helper to get path from root to a specific node
   const getPath = useCallback((targetId: string, currentNodes: Record<string, TreeNode>) => {
@@ -124,7 +125,6 @@ const useGame = (): UseGameResult => {
     });
 
     if (existingChildId) {
-      console.log('Move exists, jumping to:', existingChildId);
       setCurrentNodeId(existingChildId);
       return true;
     }
@@ -144,8 +144,6 @@ const useGame = (): UseGameResult => {
       parentId: currentNodeId,
       comments: []
     };
-
-    console.log('Creating new node:', newNodeId, 'for move:', san);
 
     setNodes(prev => {
       const parent = prev[currentNodeId];
@@ -183,10 +181,122 @@ const useGame = (): UseGameResult => {
 
   const lastMove = useMemo(() => {
     if (currentNode.move?.uci) {
-      return [currentNode.move.uci.substring(0, 2), currentNode.move.uci.substring(2, 4)];
+      return [currentNode.move.uci.substring(0, 2), currentNode.move.uci.substring(2, 4)] as [string, string];
     }
     return undefined;
   }, [currentNode]);
+
+  const loadPgn = useCallback((pgn: string) => {
+      // Very basic PGN parser for main line
+      // 1. Remove headers (anything in [])
+      const body = pgn.replace(/\[.*?\]/gs, '');
+      // 2. Remove comments (anything in {})
+      const noComments = body.replace(/\{.*?\}/gs, '');
+      // 3. Remove variations (anything in ()) - recursive needed but for now simple
+      const noVariations = noComments.replace(/\(.*?\)/gs, '');
+      // 4. Remove move numbers (1. or 1...)
+      const clean = noVariations.replace(/\d+\.+/g, ' ');
+      
+      const tokens = clean.split(/\s+/).filter(t => t && t !== '*' && t !== '1-0' && t !== '0-1' && t !== '1/2-1/2');
+      
+      // Reset game
+      const newRootId = generateId();
+      const newNodes: Record<string, TreeNode> = {
+          [newRootId]: {
+              id: newRootId,
+              fen: initialFen,
+              children: [],
+              parentId: null,
+              comments: []
+          }
+      };
+      
+      let currentId = newRootId;
+      let currentChess = Chess.default();
+      
+      for (const token of tokens) {
+          try {
+              const sanMove = parseSan(currentChess, token);
+              if (!sanMove) continue;
+              
+              const uciMove = makeSan(currentChess, sanMove); // This gives SAN back, wait.
+              // We need UCI. 
+              // chessops Move object doesn't have UCI property directly?
+              // We can construct it.
+              const from = sanMove.from;
+              const to = sanMove.to;
+              const promotion = sanMove.promotion;
+              // chessops squares are integers 0-63. We need to convert to algebraic.
+              // Actually `parseUci` goes string -> Move.
+              // We have Move. We need to apply it.
+              
+              // We need to store UCI string in node.
+              // Helper to convert square int to string?
+              // chessops/util has `makeUci`.
+              // But `makeUci` takes a Move.
+              
+              // Let's rely on playing it on `currentChess` and getting the resulting FEN.
+              // But we also need the move string (UCI) for the UI.
+              
+              // Let's implement a simple `toUci(move)`
+               const file = (s: number) => 'abcdefgh'[s & 7];
+               const rank = (s: number) => '12345678'[s >> 3];
+               const square = (s: number) => file(s) + rank(s);
+               
+               let uci = square(from) + square(to);
+               if (promotion) {
+                   uci += promotion;
+               }
+
+              currentChess.play(sanMove);
+              const newFen = makeFen(currentChess.toSetup());
+              const newNodeId = generateId();
+              
+              const newNode: TreeNode = {
+                  id: newNodeId,
+                  fen: newFen,
+                  move: { uci, san: token },
+                  children: [],
+                  parentId: currentId,
+                  comments: []
+              };
+              
+              newNodes[currentId].children.push(newNodeId);
+              newNodes[newNodeId] = newNode;
+              currentId = newNodeId;
+              
+          } catch (e) {
+              console.warn('Failed to parse move:', token);
+              break;
+          }
+      }
+      
+      setNodes(newNodes);
+      setRootId(newRootId);
+      setCurrentNodeId(newRootId); // Start at beginning of game? Or end? Usually end.
+      // Let's go to the end
+      setCurrentNodeId(currentId);
+      
+  }, []);
+
+  const exportPgn = useCallback(() => {
+      let pgn = '[Event "Casual Game"]\n[Site "ChessBased Clone"]\n[Date "' + new Date().toISOString().split('T')[0].replace(/-/g, '.') + '"]\n';
+      pgn += '[White "White"]\n[Black "Black"]\n[Result "*"]\n\n';
+      
+      // Reconstruct moves from history
+      // Note: history contains {uci, san}
+      
+      let moveString = '';
+      history.forEach((move, i) => {
+          if (i % 2 === 0) {
+              moveString += `${(i / 2) + 1}. ${move.san} `;
+          } else {
+              moveString += `${move.san} `;
+          }
+      });
+      
+      return pgn + moveString.trim() + ' *';
+  }, [history]);
 
   return { 
     fen: currentNode.fen, 
@@ -199,7 +309,9 @@ const useGame = (): UseGameResult => {
     nodes,
     currentNode,
     goToNode,
-    lastMove
+    lastMove,
+    loadPgn,
+    exportPgn
   };
 };
 

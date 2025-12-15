@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
-import type { LichessGameFilter } from '../../electron/lichess/LichessService';
+import { Download, Loader2, Database } from 'lucide-react';
+import type { LichessGameFilter } from '../types/app';
 
 interface LichessImportProps {
   onImport: (pgn: string) => void;
@@ -13,8 +13,9 @@ const LichessImport: React.FC<LichessImportProps> = ({ onImport }) => {
   const [perfType, setPerfType] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const handleImport = async () => {
+  const handleDownload = async () => {
     if (!username) {
       setError('Please enter a username');
       return;
@@ -22,6 +23,7 @@ const LichessImport: React.FC<LichessImportProps> = ({ onImport }) => {
 
     setLoading(true);
     setError(null);
+    setSuccessMsg(null);
 
     try {
       const filters: LichessGameFilter = {
@@ -34,11 +36,17 @@ const LichessImport: React.FC<LichessImportProps> = ({ onImport }) => {
         opening: true
       };
 
-      const pgn = await window.electronAPI.fetchLichessGames(username, filters);
-      onImport(pgn);
+      if (window.electronAPI) {
+          // Start background download
+          await window.electronAPI.lichessDownloadBackground(username, filters);
+          setSuccessMsg(`Download started for ${username}. Check the Databases tab.`);
+      } else {
+          // Fallback for web (if applicable, but this is Electron app)
+          setError("Electron API not available");
+      }
     } catch (err) {
       console.error(err);
-      setError('Failed to import games. Please check the username and try again.');
+      setError('Failed to start download. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -51,7 +59,7 @@ const LichessImport: React.FC<LichessImportProps> = ({ onImport }) => {
           <div className="p-2 bg-primary/10 rounded-lg">
             <Download className="w-6 h-6 text-primary" />
           </div>
-          <h2 className="text-2xl font-bold tracking-tight">Import from Lichess</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Download from Lichess</h2>
         </div>
 
         <div className="space-y-5">
@@ -75,7 +83,7 @@ const LichessImport: React.FC<LichessImportProps> = ({ onImport }) => {
                 value={maxGames}
                 onChange={(e) => setMaxGames(parseInt(e.target.value))}
                 min={1}
-                max={100}
+                max={1000} // Increased max for DB download
               />
             </div>
              <div>
@@ -110,19 +118,28 @@ const LichessImport: React.FC<LichessImportProps> = ({ onImport }) => {
               {error}
             </div>
           )}
+          
+          {successMsg && (
+            <div className="text-green-500 text-sm bg-green-500/10 p-3 rounded-md border border-green-500/20">
+              {successMsg}
+            </div>
+          )}
 
           <button
-            onClick={handleImport}
+            onClick={handleDownload}
             disabled={loading}
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2.5 px-4 rounded-md transition-colors flex items-center justify-center space-x-2 mt-2 shadow-sm"
           >
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Importing...</span>
+                <span>Starting Download...</span>
               </>
             ) : (
-              <span>Import Games</span>
+              <>
+                 <Database className="w-5 h-5" />
+                 <span>Download to Database</span>
+              </>
             )}
           </button>
         </div>

@@ -8,6 +8,7 @@ import { loadConfig, saveConfig } from './config';
 import { EngineDownloader } from './engines/EngineDownloader'; // Import EngineDownloader
 import { AVAILABLE_ENGINES } from './engines/engine-metadata';
 import type { EngineMetadata } from './engines/engine-types';
+import { DatabaseManager } from './db/DatabaseManager';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -19,6 +20,7 @@ let uciEngine: UciEngine;
 let gameDatabase: GameDatabase;
 let lichessService: LichessService;
 let engineDownloader: EngineDownloader; // Declare engineDownloader
+let databaseManager: DatabaseManager;
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -57,6 +59,7 @@ app.on('ready', () => {
   gameDatabase = new GameDatabase();
   lichessService = new LichessService();
   engineDownloader = EngineDownloader.getInstance(); // Initialize EngineDownloader
+  databaseManager = new DatabaseManager();
 });
 
 ipcMain.handle('fetch-lichess-games', async (event, username: string, filters: LichessGameFilter) => {
@@ -69,6 +72,65 @@ ipcMain.handle('fetch-lichess-games', async (event, username: string, filters: L
     console.error('IPC fetch-lichess-games error:', error);
     throw error;
   }
+});
+
+ipcMain.handle('lichess-download-background', async (event, username: string, filters: LichessGameFilter) => {
+    // 1. Create a database for this download
+    const dbName = `lichess_${username}_${Date.now()}`;
+    // We'll let createDatabase create the file path
+    const dbEntry = await databaseManager.createDatabase(dbName);
+    
+    // 2. Start download in background (don't await completion for the return)
+    lichessService.downloadUserGames(username, dbEntry.path, filters)
+        .then(async () => {
+            // Success
+            console.log(`Lichess download for ${username} completed.`);
+            // Update game count in manager
+            try {
+               await databaseManager.loadDatabaseGames(dbEntry.id);
+               if (mainWindow) {
+                   mainWindow.webContents.send('lichess-download-complete', dbEntry);
+               }
+            } catch (e) {
+                console.error('Error post-processing lichess download', e);
+            }
+        })
+        .catch(err => {
+             console.error(`Lichess download for ${username} failed:`, err);
+             if (mainWindow) {
+                 mainWindow.webContents.send('lichess-download-error', { id: dbEntry.id, error: err.message });
+             }
+        });
+
+    return dbEntry;
+});
+
+ipcMain.handle('db-get-list', async () => {
+    return databaseManager.getDatabases();
+});
+
+ipcMain.handle('db-create', async (event, name: string) => {
+    return databaseManager.createDatabase(name);
+});
+
+ipcMain.handle('db-import', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        filters: [{ name: 'PGN Files', extensions: ['pgn'] }],
+    });
+    
+    if (!canceled && filePaths.length > 0) {
+        return databaseManager.addDatabase(filePaths[0]);
+    }
+    return null;
+});
+
+ipcMain.handle('db-load-games', async (event, id: string) => {
+    return databaseManager.loadDatabaseGames(id);
+});
+
+ipcMain.handle('db-add-game', async (event, id: string, pgn: string) => {
+    return databaseManager.addGameToDatabase(id, pgn);
 });
 
 ipcMain.handle('open-pgn-file', async () => {

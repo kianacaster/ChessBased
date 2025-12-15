@@ -4,10 +4,13 @@ import useGame from './hooks/useGame';
 import Notation from './components/Notation';
 import LichessImport from './components/LichessImport';
 import EngineManager from './components/EngineManager';
-import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp } from 'lucide-react';
+import DatabaseList from './components/DatabaseList';
+import DatabaseView from './components/DatabaseView';
+import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft } from 'lucide-react';
 import * as React from 'react';
 import { clsx } from 'clsx';
 import { parseUciInfo, type EngineInfo } from './utils/engine';
+import type { DatabaseEntry } from './types/app';
 
 interface SidebarItemProps {
   icon: React.ElementType;
@@ -37,7 +40,7 @@ const SidebarItem = ({
 );
 
 function App() {
-  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove } = useGame();
+  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove, loadPgn, exportPgn } = useGame();
   
   // Engine State
   const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
@@ -45,9 +48,11 @@ function App() {
   const [isDeepAnalysis, setIsDeepAnalysis] = React.useState(false);
   const [engineOutput, setEngineOutput] = React.useState<string[]>([]); // Keep raw output for debug if needed
 
-  const [currentView, setCurrentView] = React.useState<'board' | 'lichess' | 'engineManager'>('board');
+  const [currentView, setCurrentView] = React.useState<'board' | 'lichess' | 'engineManager' | 'databases' | 'databaseDetail'>('board');
   const [enginePath, setEnginePath] = React.useState<string | null>(null);
   const [engineDisplayName, setEngineDisplayName] = React.useState<string>('');
+  
+  const [selectedDatabase, setSelectedDatabase] = React.useState<DatabaseEntry | null>(null);
 
   // Load engine path on startup
   React.useEffect(() => {
@@ -112,8 +117,19 @@ function App() {
 
   const handleOpenFile = async () => {
     if (window.electronAPI) {
-      await window.electronAPI.openPgnFile();
+      const content = await window.electronAPI.openPgnFile();
+      if (content) {
+          loadPgn(content);
+          setCurrentView('board');
+      }
     }
+  };
+  
+  const handleSaveGame = async () => {
+      const pgn = exportPgn();
+      if (window.electronAPI) {
+          await window.electronAPI.savePgnFile(pgn);
+      }
   };
 
   const handleEngineSelected = React.useCallback(async (path: string | null) => {
@@ -128,7 +144,7 @@ function App() {
   }, []);
 
   const handleLichessImport = (pgn: string) => {
-    console.log('Imported PGN length:', pgn.length);
+    loadPgn(pgn);
     setCurrentView('board');
   };
 
@@ -151,6 +167,20 @@ function App() {
       brush: 'blue' // or 'green'
     }];
   }, [engineInfo]);
+  
+  const handleSelectDatabase = (db: DatabaseEntry) => {
+      setSelectedDatabase(db);
+      setCurrentView('databaseDetail');
+  };
+  
+  const handleLoadGameFromDb = (pgn: string) => {
+      // In DatabaseView, we currently pass index/header. 
+      // But if we upgrade DatabaseView to pass the full PGN (extracted from headers if we store it), 
+      // or fetch it, we use it here.
+      // Note: DatabaseView currently calls `handleGameClick` which does nothing.
+      // I need to update DatabaseView to pass the PGN. 
+      // Since I updated Database.ts to include `pgn` in GameHeader, I can access it there.
+  };
 
   return (
     <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden font-sans">
@@ -176,8 +206,12 @@ function App() {
                     active={currentView === 'board'}
                     onClick={() => setCurrentView('board')}
                   />
-                  <SidebarItem icon={FileText} label="Grandmaster DB" />
-                  <SidebarItem icon={Save} label="Saved Analysis" />
+                  <SidebarItem 
+                    icon={FileText} 
+                    label="Databases" 
+                    active={currentView === 'databases' || currentView === 'databaseDetail'} 
+                    onClick={() => setCurrentView('databases')}
+                  />
                 </div>
               </div>
               
@@ -213,9 +247,9 @@ function App() {
                     <Cpu size={18} />
                     <span className="text-[10px] mt-1">Engine</span>
                   </button>
-                   <button className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-accent-foreground transition-colors" title="Settings">
-                    <Settings size={18} />
-                    <span className="text-[10px] mt-1">Settings</span>
+                   <button onClick={handleSaveGame} className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-accent-foreground transition-colors" title="Save Game">
+                    <Save size={18} />
+                    <span className="text-[10px] mt-1">Save</span>
                   </button>
                </div>
                
@@ -239,6 +273,17 @@ function App() {
             </div>
           ) : currentView === 'engineManager' ? (
             <EngineManager onEngineSelected={handleEngineSelected} currentEnginePath={enginePath} />
+          ) : currentView === 'databases' ? (
+             <DatabaseList onSelectDatabase={handleSelectDatabase} />
+          ) : currentView === 'databaseDetail' && selectedDatabase ? (
+             <DatabaseView 
+                database={selectedDatabase} 
+                onBack={() => setCurrentView('databases')} 
+                onLoadGame={(pgn) => {
+                    loadPgn(pgn);
+                    setCurrentView('board');
+                }}
+             />
           ) : (
             <div className="flex flex-col h-full bg-background relative">
              <div className="absolute top-0 left-0 w-full h-16 bg-gradient-to-b from-background to-transparent z-0 pointer-events-none" />

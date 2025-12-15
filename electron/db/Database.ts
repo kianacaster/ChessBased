@@ -8,7 +8,8 @@ export interface GameHeader {
   White: string;
   Black: string;
   Result: string;
-  // Add other common PGN tags as needed
+  pgn: string; // The full PGN of this game (headers + moves)
+  [key: string]: string; // Allow other tags
 }
 
 export class GameDatabase {
@@ -22,12 +23,29 @@ export class GameDatabase {
     const headers: GameHeader[] = [];
     const lines = pgnContent.split('\n');
     let currentHeader: Partial<GameHeader> = {};
+    let currentGameLines: string[] = [];
     let inHeaders = true;
+    
+    // Helper to push current game
+    const pushGame = () => {
+        if (Object.keys(currentHeader).length > 0) {
+            currentHeader.pgn = currentGameLines.join('\n');
+            headers.push(currentHeader as GameHeader);
+            currentHeader = {};
+            currentGameLines = [];
+        }
+    };
 
     for (const line of lines) {
       const trimmedLine = line.trim();
 
       if (trimmedLine.startsWith('[') && trimmedLine.endsWith(']')) {
+         // If we were parsing moves (not in headers) and hit a new header, it's a new game.
+         if (!inHeaders) {
+             pushGame();
+             inHeaders = true;
+         }
+         
         // PGN Tag Pair
         const match = trimmedLine.match(/^\[(\w+)\s+"(.*)"\]$/);
         if (match) {
@@ -36,34 +54,26 @@ export class GameDatabase {
           currentHeader[tagName] = tagValue;
         }
       } else if (trimmedLine === '' && inHeaders) {
-        // Empty line separates headers from moves
-        // If we have collected any headers, push them
-        if (Object.keys(currentHeader).length > 0) {
-          headers.push(currentHeader as GameHeader);
-          currentHeader = {}; // Reset for next game
-        }
-        inHeaders = false; // Once an empty line is encountered, assume moves follow
-      } else if (trimmedLine !== '' && !inHeaders) {
-        // We are in the moves section, or a new game starts with headers
-        // If we encounter a new header tag, it means a new game starts
-        if (trimmedLine.startsWith('[')) {
-          inHeaders = true;
-          // Re-process this line as a header for the new game
-          const match = trimmedLine.match(/^\[(\w+)\s+"(.*)"\]$/);
-          if (match) {
-            const tagName = match[1] as keyof GameHeader;
-            const tagValue = match[2];
-            currentHeader[tagName] = tagValue;
-          }
-        }
-      }
+         // Empty line after headers marks start of moves
+         if (Object.keys(currentHeader).length > 0) {
+             inHeaders = false;
+         }
+      } 
+      
+      // Always add line to current game PGN
+      // Note: We might want to be careful about where the split happened, 
+      // but assuming we are just reconstructing, adding the line is safe.
+      // However, the logic above for "new game detection" relies on `!inHeaders`.
+      // If we have a file with multiple games, we need to ensure we don't accidentally merge them 
+      // if there are blank lines between games.
+      
+      currentGameLines.push(line);
     }
-    // Add any remaining header if the file ends without an empty line after the last game's headers
-    if (Object.keys(currentHeader).length > 0) {
-      headers.push(currentHeader as GameHeader);
-    }
+    
+    // Push last game
+    pushGame();
 
-    this.games.push(...headers); // Add extracted headers to the in-memory store
+    this.games.push(...headers); 
     return headers;
   }
 

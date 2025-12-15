@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import type { EngineMetadata } from '../../electron/engines/engine-types';
-import { Download, Loader2, Cpu } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Download, Cpu, Trash2, Check, AlertCircle, Play, Square, Loader2 } from 'lucide-react';
+import type { EngineMetadata } from '../types/app';
 import { clsx } from 'clsx';
 
 interface EngineManagerProps {
