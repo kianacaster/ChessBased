@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { DatabaseEntry } from '../types/app';
-import { Database, Plus, FolderOpen, FileText, Calendar } from 'lucide-react';
+import { Database, Plus, FolderOpen, FileText, Calendar, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface DatabaseListProps {
@@ -69,6 +69,18 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
       console.error("Failed to import database", err);
     }
   };
+  
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (confirm('Are you sure you want to delete this database? The file will be moved to the trash.')) {
+          try {
+              await window.electronAPI.dbDelete(id);
+              setDatabases(prev => prev.filter(db => db.id !== id));
+          } catch (err) {
+              console.error("Failed to delete database", err);
+          }
+      }
+  };
 
   if (loading) {
     return <div className="p-8 text-center text-muted-foreground">Loading databases...</div>;
@@ -134,11 +146,11 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
             <button 
                 key={db.id}
                 onClick={() => onSelectDatabase(db)}
-                className="flex flex-col text-left p-4 bg-card border border-border rounded-lg hover:border-primary/50 hover:shadow-md transition-all group"
+                className="flex flex-col text-left p-4 bg-card border border-border rounded-lg hover:border-primary/50 hover:shadow-md transition-all group relative"
             >
                 <div className="flex items-center space-x-3 mb-3">
                     <FileText className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                    <span className="font-semibold text-lg truncate w-full">{db.name}</span>
+                    <span className="font-semibold text-lg truncate w-full pr-8">{db.name}</span>
                 </div>
                 <div className="text-sm text-muted-foreground space-y-1">
                     <div className="flex items-center justify-between">
@@ -157,6 +169,14 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
                 </div>
                 <div className="mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground truncate w-full opacity-70">
                     {db.path}
+                </div>
+                
+                <div 
+                    onClick={(e) => handleDelete(db.id, e)}
+                    className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                    title="Delete Database"
+                >
+                    <Trash2 size={16} />
                 </div>
             </button>
         ))}

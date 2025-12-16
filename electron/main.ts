@@ -133,6 +133,10 @@ ipcMain.handle('db-add-game', async (event, id: string, pgn: string) => {
     return databaseManager.addGameToDatabase(id, pgn);
 });
 
+ipcMain.handle('db-delete', async (event, id: string) => {
+    return databaseManager.deleteDatabase(id);
+});
+
 ipcMain.handle('open-pgn-file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],

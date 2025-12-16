@@ -135,7 +135,88 @@ ${pgn}
       }
   }
 
-  public async findDatabaseByPath(filePath: string): Promise<DatabaseEntry | undefined> {
-    return this.databases.find(d => d.path === filePath);
+    public async findDatabaseByPath(filePath: string): Promise<DatabaseEntry | undefined> {
+
+      return this.databases.find(d => d.path === filePath);
+
+    }
+
+  
+
+    public async deleteDatabase(id: string): Promise<void> {
+
+      const dbIndex = this.databases.findIndex(d => d.id === id);
+
+      if (dbIndex === -1) {
+
+        throw new Error('Database not found');
+
+      }
+
+  
+
+      const db = this.databases[dbIndex];
+
+      
+
+      // Create trash directory
+
+      const userDataPath = app.getPath('userData');
+
+      const trashDir = path.join(userDataPath, 'databases', 'trash');
+
+      await fs.mkdir(trashDir, { recursive: true });
+
+  
+
+      // Move file
+
+      try {
+
+          const fileName = path.basename(db.path);
+
+          const trashPath = path.join(trashDir, `${Date.now()}_${fileName}`); // Append timestamp to avoid collisions
+
+          
+
+          // Check if source file exists before trying to move
+
+          // If it doesn't exist, we just remove the entry
+
+                    try {
+
+                        await fs.access(db.path);
+
+                        await fs.rename(db.path, trashPath);
+
+                        console.log(`Database moved to trash: ${trashPath}`);
+
+                    } catch (e) {
+
+          
+
+              // File might not exist, ignore move error
+
+              console.warn(`File for database ${db.name} not found, just removing entry.`);
+
+          }
+
+      } catch (error) {
+
+          throw new Error(`Failed to move database to trash: ${error}`);
+
+      }
+
+  
+
+      // Remove from list
+
+      this.databases.splice(dbIndex, 1);
+
+      await this.saveDatabases();
+
+    }
+
   }
-}
+
+  

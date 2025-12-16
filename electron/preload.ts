@@ -44,4 +44,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbImport: () => ipcRenderer.invoke('db-import'),
   dbLoadGames: (id: string) => ipcRenderer.invoke('db-load-games', id),
   dbAddGame: (id: string, pgn: string) => ipcRenderer.invoke('db-add-game', id, pgn),
+  dbDelete: (id: string) => ipcRenderer.invoke('db-delete', id),
 });
