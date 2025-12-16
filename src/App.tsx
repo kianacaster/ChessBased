@@ -7,7 +7,8 @@ import EngineManager from './components/EngineManager';
 import DatabaseList from './components/DatabaseList';
 import DatabaseView from './components/DatabaseView';
 import SaveToDatabaseModal from './components/SaveToDatabaseModal';
-import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft, PlusCircle } from 'lucide-react';
+import DatabaseExplorer from './components/DatabaseExplorer';
+import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft, PlusCircle, BookOpen } from 'lucide-react';
 import * as React from 'react';
 import { clsx } from 'clsx';
 import { parseUciInfo, type EngineInfo } from './utils/engine';
@@ -50,6 +51,7 @@ function App() {
   const [engineOutput, setEngineOutput] = React.useState<string[]>([]); // Keep raw output for debug if needed
 
   const [currentView, setCurrentView] = React.useState<'board' | 'lichess' | 'engineManager' | 'databases' | 'databaseDetail'>('board');
+  const [analysisTab, setAnalysisTab] = React.useState<'notation' | 'explorer'>('notation');
   const [enginePath, setEnginePath] = React.useState<string | null>(null);
   const [engineDisplayName, setEngineDisplayName] = React.useState<string>('');
   
@@ -357,21 +359,59 @@ function App() {
         analysis={
           <div className="flex flex-col h-full bg-sidebar border-l border-sidebar-border">
              <div className="flex-1 overflow-hidden flex flex-col">
-                <div className="px-4 py-3 border-b border-sidebar-border flex items-center justify-between bg-sidebar">
-                  <div className="flex items-center space-x-2 text-sm font-semibold text-foreground">
-                    <History size={16} className="text-muted-foreground" />
-                    <span>Moves</span>
+                <div className="px-4 py-2 border-b border-sidebar-border flex items-center justify-between bg-sidebar">
+                  <div className="flex space-x-1 bg-muted/20 p-1 rounded-lg">
+                      <button 
+                        onClick={() => setAnalysisTab('notation')}
+                        className={clsx(
+                            "px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center space-x-2",
+                            analysisTab === 'notation' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <History size={14} />
+                        <span>Moves</span>
+                      </button>
+                      <button 
+                        onClick={() => setAnalysisTab('explorer')}
+                        className={clsx(
+                            "px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center space-x-2",
+                            analysisTab === 'explorer' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <BookOpen size={14} />
+                        <span>Explorer</span>
+                      </button>
                   </div>
                 </div>
+                
                 <div className="flex-1 overflow-y-auto">
-                  <Notation 
-                    history={history} 
-                    currentMoveIndex={currentMoveIndex} 
-                    onMoveClick={jumpToMove}
-                    nodes={nodes}
-                    currentNodeId={currentNode.id}
-                    onNodeClick={goToNode} 
-                  />
+                  {analysisTab === 'notation' ? (
+                      <Notation 
+                        history={history} 
+                        currentMoveIndex={currentMoveIndex} 
+                        onMoveClick={jumpToMove}
+                        nodes={nodes}
+                        currentNodeId={currentNode.id}
+                        onNodeClick={goToNode} 
+                      />
+                  ) : (
+                      <DatabaseExplorer 
+                        historySan={history.map(m => m.san)}
+                        onPlayMove={(san) => {
+                            // Find move in dests? We need to convert SAN to UCI or find in valid moves.
+                            // useGame doesn't have moveSan.
+                            // But usually, if we just want to navigate, we might need logic.
+                            // For now, let's just log or try to apply if simple.
+                            // Actually, 'move' takes orig, dest. SAN parsing is hard here without library.
+                            // We can rely on user making the move on board.
+                            console.log("Play move", san);
+                        }}
+                        onLoadGame={(pgn) => {
+                            loadPgn(pgn);
+                            setAnalysisTab('notation');
+                        }}
+                      />
+                  )}
                 </div>
              </div>
              

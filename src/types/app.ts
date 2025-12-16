@@ -80,4 +80,22 @@ export interface IElectronAPI {
   dbLoadGames: (id: string) => Promise<GameHeader[]>;
   dbAddGame: (id: string, pgn: string) => Promise<void>;
   dbDelete: (id: string) => Promise<void>;
+  dbSearch: (dbIds: string[], moves: string[]) => Promise<ExplorerResult>;
+}
+
+export interface ExplorerMoveStats {
+  san: string;
+  white: number;
+  draw: number;
+  black: number;
+  total: number;
+}
+
+export interface ExplorerResult {
+  games: GameHeader[]; // Recent games or top games
+  moves: ExplorerMoveStats[];
+  totalGames: number;
+  whiteWinPercent: number;
+  drawPercent: number;
+  blackWinPercent: number;
 }

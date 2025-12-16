@@ -84,4 +84,61 @@ export class GameDatabase {
   public clearGames(): void {
     this.games = [];
   }
+
+  public static filterGames(games: GameHeader[], moves: string[]): { matchingGames: GameHeader[], moveStats: Map<string, { w: number, d: number, b: number }> } {
+      const matchingGames: GameHeader[] = [];
+      const moveStats = new Map<string, { w: number, d: number, b: number }>();
+
+      for (const game of games) {
+          if (!game.pgn) continue;
+
+          // Simple tokenization
+          // Remove comments { ... }
+          let body = game.pgn.replace(/\{[^}]*\}/g, '');
+          // Remove variations ( ... ) - nested variations need recursive removal, simplistic for now
+          // A robust PGN parser handles this, but for "starts with", simplistic regex might fail on complex nested comments.
+          // Let's rely on basic stripping.
+          body = body.replace(/\([^)]*\)/g, '');
+          // Remove tag pairs if any left (shouldn't be in pgn body usually if split correctly)
+          body = body.replace(/\[[^\]]*\]/g, '');
+          // Remove move numbers "1." "1..."
+          body = body.replace(/\d+\.+/g, '');
+          
+          const tokens = body.trim().split(/\s+/);
+          
+          // Check if game starts with 'moves'
+          let match = true;
+          if (tokens.length < moves.length) {
+              match = false;
+          } else {
+              for (let i = 0; i < moves.length; i++) {
+                  if (tokens[i] !== moves[i]) {
+                      match = false;
+                      break;
+                  }
+              }
+          }
+
+          if (match) {
+              matchingGames.push(game);
+              
+              // Record next move if exists
+              if (tokens.length > moves.length) {
+                  const nextMove = tokens[moves.length];
+                  // Filter out results like 1-0, 0-1, 1/2-1/2, *
+                  if (!['1-0', '0-1', '1/2-1/2', '*'].includes(nextMove)) {
+                      if (!moveStats.has(nextMove)) {
+                          moveStats.set(nextMove, { w: 0, d: 0, b: 0 });
+                      }
+                      const stats = moveStats.get(nextMove)!;
+                      
+                      if (game.Result === '1-0') stats.w++;
+                      else if (game.Result === '0-1') stats.b++;
+                      else stats.d++;
+                  }
+              }
+          }
+      }
+      return { matchingGames, moveStats };
+  }
 }

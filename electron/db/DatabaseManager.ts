@@ -363,12 +363,122 @@ export class DatabaseManager {
 
       // Remove from list
 
-      this.databases.splice(dbIndex, 1);
+          this.databases.splice(dbIndex, 1);
 
-      await this.saveDatabases();
+          await this.saveDatabases();
 
-    }
+        }
 
-  }
+      
+
+        public async searchGames(dbIds: string[], moves: string[]): Promise<any> { // return ExplorerResult type if imported, using any to avoid import cycles for now or just inline structure
+
+            await this.initPromise;
+
+            
+
+            let allGames: GameHeader[] = [];
+
+            
+
+            for (const id of dbIds) {
+
+                const db = this.databases.find(d => d.id === id);
+
+                if (db) {
+
+                    try {
+
+                        // We need to load games from file. 
+
+                        // Optimization: Cache loaded games? For now, read file.
+
+                        const content = await fs.readFile(db.path, 'utf-8');
+
+                        // We need a temp instance to parse? Or static method?
+
+                        // extractHeadersFromPgn is instance method.
+
+                        // We can reuse this.gameDatabase but it clears games.
+
+                        // Let's reuse it sequentially.
+
+                        this.gameDatabase.clearGames();
+
+                        const headers = await this.gameDatabase.extractHeadersFromPgn(content);
+
+                        allGames = allGames.concat(headers);
+
+                    } catch (e) {
+
+                        console.error(`Failed to load db ${db.name} for search`, e);
+
+                    }
+
+                }
+
+            }
+
+      
+
+            const { matchingGames, moveStats } = GameDatabase.filterGames(allGames, moves);
+
+            
+
+            // Calculate Aggregates
+
+            let total = matchingGames.length;
+
+            let w = 0, d = 0, b = 0;
+
+            matchingGames.forEach(g => {
+
+                if (g.Result === '1-0') w++;
+
+                else if (g.Result === '0-1') b++;
+
+                else d++;
+
+            });
+
+      
+
+            const movesList = Array.from(moveStats.entries()).map(([san, s]) => ({
+
+                san,
+
+                white: s.w,
+
+                draw: s.d,
+
+                black: s.b,
+
+                total: s.w + s.d + s.b
+
+            })).sort((a, b) => b.total - a.total);
+
+      
+
+            return {
+
+                games: matchingGames.slice(0, 100), // Limit return
+
+                moves: movesList,
+
+                totalGames: total,
+
+                whiteWinPercent: total ? (w / total) * 100 : 0,
+
+                drawPercent: total ? (d / total) * 100 : 0,
+
+                blackWinPercent: total ? (b / total) * 100 : 0
+
+            };
+
+        }
+
+      }
+
+      
 
   

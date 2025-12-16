@@ -137,6 +137,10 @@ ipcMain.handle('db-delete', async (event, id: string) => {
     return databaseManager.deleteDatabase(id);
 });
 
+ipcMain.handle('db-search', async (event, dbIds: string[], moves: string[]) => {
+    return databaseManager.searchGames(dbIds, moves);
+});
+
 ipcMain.handle('open-pgn-file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
