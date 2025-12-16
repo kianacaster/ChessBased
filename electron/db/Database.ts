@@ -22,6 +22,7 @@ export class GameDatabase {
   public async extractHeadersFromPgn(pgnContent: string): Promise<GameHeader[]> {
     const headers: GameHeader[] = [];
     const lines = pgnContent.split('\n');
+    console.log(`[GameDatabase] Parsing ${lines.length} lines.`);
     let currentHeader: Partial<GameHeader> = {};
     let currentGameLines: string[] = [];
     let inHeaders = true;
