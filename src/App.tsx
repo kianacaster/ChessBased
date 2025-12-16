@@ -9,11 +9,13 @@ import DatabaseView from './components/DatabaseView';
 import SaveToDatabaseModal from './components/SaveToDatabaseModal';
 import DatabaseExplorer from './components/DatabaseExplorer';
 import PrepExplorer from './components/PrepExplorer';
+import AnnotationTools from './components/AnnotationTools';
 import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft, PlusCircle, BookOpen, Users } from 'lucide-react';
 import * as React from 'react';
 import { clsx } from 'clsx';
 import { parseUciInfo, type EngineInfo } from './utils/engine';
 import type { DatabaseEntry } from './types/app';
+import type { DrawShape } from './types/chess';
 
 interface SidebarItemProps {
   icon: React.ElementType;
@@ -43,7 +45,7 @@ const SidebarItem = ({
 );
 
 function App() {
-  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove, loadPgn, exportPgn, goBack, goForward, goToStart, goToEnd, playSan, playLine, gameMetadata } = useGame();
+  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove, loadPgn, exportPgn, goBack, goForward, goToStart, goToEnd, playSan, playLine, gameMetadata, setNodeComment, setNodeNags, setNodeShapes } = useGame();
   
   // Engine State
   const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
@@ -203,16 +205,60 @@ function App() {
 
   // Compute shapes for best move arrow
   const shapes = React.useMemo(() => {
-    if (!engineInfo || !engineInfo.pv || engineInfo.pv.length === 0) return [];
-    const bestMove = engineInfo.pv[0];
-    if (bestMove.length < 4) return [];
+    const result: any[] = [];
     
-    return [{
-      orig: bestMove.substring(0, 2),
-      dest: bestMove.substring(2, 4),
-      brush: 'blue' // or 'green'
-    }];
-  }, [engineInfo]);
+    // Engine shapes
+    if (engineInfo && engineInfo.pv && engineInfo.pv.length > 0) {
+        const bestMove = engineInfo.pv[0];
+        if (bestMove.length >= 4) {
+            result.push({
+              orig: bestMove.substring(0, 2),
+              dest: bestMove.substring(2, 4),
+              brush: 'blue' // or 'green'
+            });
+        }
+    }
+    
+    // User shapes from current node
+    if (currentNode.shapes) {
+        result.push(...currentNode.shapes);
+    }
+    
+    return result;
+  }, [engineInfo, currentNode.shapes]);
+  
+  const handleDraw = (newShapes: DrawShape[]) => {
+      // Filter out engine shapes if they are passed back? 
+      // Chessground sends back ALL shapes on board including those set via props.
+      // We need to differentiate or just save them all?
+      // Actually, we should only save what the user drew.
+      // But Chessground doesn't distinguish. 
+      // However, the `shapes` prop is what renders. `onChange` is triggered when user draws.
+      // If we save everything to the node, next render we get duplicates or infinite loop?
+      
+      // We need to strip out the engine arrow if it's there? 
+      // Or maybe just save them. If user draws over engine arrow, that's fine.
+      // But wait, if engine updates, it adds arrow.
+      // If we save that arrow to node, it becomes permanent. That's bad.
+      
+      // Strategy: Remove the engine arrow from `newShapes` before saving.
+      // Engine arrow is defined by `engineInfo`.
+      
+      let shapesToSave = [...newShapes];
+      
+      if (engineInfo && engineInfo.pv && engineInfo.pv.length >= 4) {
+          const bestMove = engineInfo.pv[0];
+          const engineOrig = bestMove.substring(0, 2);
+          const engineDest = bestMove.substring(2, 4);
+          
+          // Remove if it matches engine arrow exactly
+          shapesToSave = shapesToSave.filter(s => 
+              !(s.orig === engineOrig && s.dest === engineDest && s.brush === 'blue')
+          );
+      }
+      
+      setNodeShapes(currentNode.id, shapesToSave);
+  };
   
   const handleSelectDatabase = (db: DatabaseEntry) => {
       setSelectedDatabase(db);
@@ -359,7 +405,7 @@ function App() {
              
             <div className="flex-1 flex items-center justify-center p-6 overflow-hidden">
               <div className="relative w-full max-w-[80vh] aspect-square shadow-2xl rounded-sm overflow-hidden ring-1 ring-border/50">
-                <Board fen={fen} turn={turn} onMove={handleMove} dests={dests} shapes={shapes} lastMove={lastMove} />
+                <Board fen={fen} turn={turn} onMove={handleMove} dests={dests} shapes={shapes} lastMove={lastMove} onDraw={handleDraw} />
               </div>
             </div>
           </div>
@@ -405,14 +451,24 @@ function App() {
                 
                 <div className="flex-1 overflow-y-auto">
                   {analysisTab === 'notation' ? (
-                      <Notation 
-                        history={history} 
-                        currentMoveIndex={currentMoveIndex} 
-                        onMoveClick={jumpToMove}
-                        nodes={nodes}
-                        currentNodeId={currentNode.id}
-                        onNodeClick={goToNode} 
-                      />
+                      <div className="flex flex-col h-full">
+                          <div className="flex-1 overflow-y-auto min-h-0">
+                              <Notation 
+                                history={history} 
+                                currentMoveIndex={currentMoveIndex} 
+                                onMoveClick={jumpToMove}
+                                nodes={nodes}
+                                currentNodeId={currentNode.id}
+                                onNodeClick={goToNode} 
+                              />
+                          </div>
+                          <AnnotationTools 
+                             currentNode={currentNode}
+                             onUpdateComment={setNodeComment}
+                             onUpdateNags={setNodeNags}
+                             onClearShapes={(id) => setNodeShapes(id, [])}
+                          />
+                      </div>
                   ) : analysisTab === 'explorer' ? (
                       <DatabaseExplorer 
                         historySan={history.map(m => m.san)}

@@ -130,6 +130,10 @@ const Notation: React.FC<NotationProps> = ({
 
 // Inline Tree for Paragraph View
 
+const NAG_MAP: Record<number, string> = {
+  1: '!', 2: '?', 3: '!!', 4: '??', 5: '!?', 6: '?!'
+};
+
 const InlineTree: React.FC<{
 
   nodeId: string;
@@ -168,13 +172,14 @@ const InlineTree: React.FC<{
 
   const showNumber = isWhite || forceShowNumber;
 
+  
+  const nags = mainChild.nags?.map(n => NAG_MAP[n] || '').join('') || '';
+  const comment = mainChild.comments?.[0];
 
 
   const MainMoveElement = (
-
+      <React.Fragment key={mainChildId}>
       <span 
-
-        key={mainChildId}
 
         data-node-id={mainChildId}
 
@@ -200,9 +205,15 @@ const InlineTree: React.FC<{
 
         {showNumber && <span className="text-muted-foreground mr-1 font-mono select-none text-xs">{label}</span>}
 
-        <span className="mr-1">{mainChild.move?.san}</span>
+        <span className="mr-0.5">{mainChild.move?.san}{nags}</span>
 
       </span>
+      {comment && (
+        <div className="block w-full my-1 pl-2 border-l-2 border-primary/40 text-muted-foreground italic text-xs font-normal">
+            {comment}
+        </div>
+      )}
+      </React.Fragment>
 
   );
 
@@ -225,6 +236,8 @@ const InlineTree: React.FC<{
                   const varNode = nodes[varId];
 
                   const varLabel = isWhite ? `${moveNumber}.` : `${moveNumber}...`;
+                  const varNags = varNode.nags?.map(n => NAG_MAP[n] || '').join('') || '';
+                  const varComment = varNode.comments?.[0];
 
                   // For variation start, always show number? Yes usually.
 
@@ -260,9 +273,15 @@ const InlineTree: React.FC<{
 
                              <span className="text-muted-foreground mr-1 font-mono text-xs">{varLabel}</span>
 
-                             <span>{varNode.move?.san}</span>
+                             <span>{varNode.move?.san}{varNags}</span>
 
                           </span>
+                          
+                          {varComment && (
+                            <span className="italic text-xs text-muted-foreground mx-1">
+                                {varComment}
+                            </span>
+                          )}
 
                           <InlineTree 
 

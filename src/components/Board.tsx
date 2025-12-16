@@ -17,17 +17,23 @@ interface BoardProps {
   dests: Map<string, string[]>;
   shapes?: Shape[];
   lastMove?: string[];
+  onDraw?: (shapes: Shape[]) => void;
 }
 
-const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, dests, shapes = [], lastMove }) => {
+const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, dests, shapes = [], lastMove, onDraw }) => {
   const cgRef = useRef<any | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const onMoveRef = useRef(onMove);
+  const onDrawRef = useRef(onDraw);
 
-  // Keep onMoveRef up to date
+  // Keep refs up to date
   useEffect(() => {
     onMoveRef.current = onMove;
   }, [onMove]);
+  
+  useEffect(() => {
+    onDrawRef.current = onDraw;
+  }, [onDraw]);
 
   useEffect(() => {
     if (elementRef.current) {
@@ -44,6 +50,11 @@ const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, de
         },
         drawable: {
           shapes: shapes,
+          onChange: (shapes: Shape[]) => {
+            if (onDrawRef.current) {
+                onDrawRef.current(shapes);
+            }
+          }
         },
         lastMove: lastMove, 
         events: {
@@ -69,7 +80,7 @@ const Board: React.FC<BoardProps> = ({ fen = 'start', turn = 'white', onMove, de
       cgRef.current.set({ 
         fen, 
         movable: { dests, color: 'both' },
-        drawable: { shapes },
+        drawable: { shapes, onChange: (s: Shape[]) => onDrawRef.current && onDrawRef.current(s) },
         lastMove: lastMove 
       });
     }
