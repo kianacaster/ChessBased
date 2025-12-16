@@ -531,11 +531,35 @@ export class DatabaseManager {
       return filtered;
   }
 
-  public async getPrepScenarios(dbIdsA: string[], dbIdsB: string[], rootMoves: string[], maxDepth: number = 12): Promise<any> {
+  public async getPrepScenarios(
+      dbIdsA: string[], 
+      dbIdsB: string[], 
+      rootMoves: string[], 
+      maxDepth: number = 12,
+      context?: { heroName: string, opponentName: string, heroColor: 'white' | 'black' }
+  ): Promise<any> {
       await this.initPromise;
       
-      const gamesA = await this._loadGamesFromIds(dbIdsA);
-      const gamesB = await this._loadGamesFromIds(dbIdsB);
+      let gamesA = await this._loadGamesFromIds(dbIdsA);
+      let gamesB = await this._loadGamesFromIds(dbIdsB);
+      
+      // Filter by Color/Name if context provided
+      if (context) {
+          const { heroName, opponentName, heroColor } = context;
+          const heroNameLower = heroName.toLowerCase();
+          const opponentNameLower = opponentName.toLowerCase();
+          
+          gamesA = gamesA.filter(g => {
+              if (heroColor === 'white') return g.White?.toLowerCase().includes(heroNameLower);
+              else return g.Black?.toLowerCase().includes(heroNameLower);
+          });
+          
+          gamesB = gamesB.filter(g => {
+              // If Hero is White, Opponent is Black
+              if (heroColor === 'white') return g.Black?.toLowerCase().includes(opponentNameLower);
+              else return g.White?.toLowerCase().includes(opponentNameLower);
+          });
+      }
       
       // Initial Filter to Root
       const rootResA = GameDatabase.filterGames(gamesA, rootMoves);
@@ -571,33 +595,23 @@ export class DatabaseManager {
               const current = queue.shift()!;
               const currentDepth = rootDepth + current.line.length;
               
-              // Determine turn.
-              // We assume Group A is Hero (Me).
-              // If I am White, I move on even plies (0, 2..).
-              // If I am Black, I move on odd plies (1, 3..).
-              // How do we know if Hero is White or Black?
-              // Usually prep is "I am Player X".
-              // If I enter my username, I play both colors.
-              // BUT "Opening Prep" is usually for a specific color context starting from root.
-              // If root is empty, I am White.
-              // If root is 1. e4, I am Black.
-              // So: Hero moves when (rootDepth + line.length) % 2 == (rootDepth % 2).
-              // Wait.
-              // Root [] (0). White to move. Hero moves.
-              // Root ['e4'] (1). Black to move. Hero moves.
-              // So Hero moves when it is the turn of the Root side? Yes.
+              // Determine turn relative to Hero.
+              // If context provided:
+              //   rootMoves.length % 2 == 0 => White to move.
+              //   If heroColor == 'white', it is Hero's turn.
+              // If no context, assume A is Hero and Hero is always to move? No, that's impossible.
+              // Let's assume standard chess rules.
               
-              // Wait, if I want to prep against e4 as Black.
-              // I load My games (A) and Opp games (B).
-              // I set board to 1. e4.
-              // It is Black's turn (My turn).
-              // So at depth 0 relative to root, it is My turn.
-              // So **Depth 0 is ALWAYS Hero's turn** in this logic?
-              // No, user said "I play c4... opponent plays c5".
-              // This implies Root is empty. I move first.
+              const isWhiteToMove = (currentDepth % 2) === 0;
+              let isHeroTurn = true;
               
-              // So: Even local depth = Hero Move. Odd local depth = Opponent Move.
-              const isHeroTurn = current.line.length % 2 === 0;
+              if (context) {
+                  isHeroTurn = (isWhiteToMove && context.heroColor === 'white') || (!isWhiteToMove && context.heroColor === 'black');
+              } else {
+                  // Fallback: Even local depth = Hero Move (Assuming root is Hero turn)
+                  isHeroTurn = current.line.length % 2 === 0;
+              }
+              
               const sourceGames = isHeroTurn ? current.gamesA : current.gamesB;
               const totalSource = sourceGames.length;
               
@@ -657,19 +671,14 @@ export class DatabaseManager {
           }
           
           // Apply Beam Search on nextQueue
-          // Sort by "Score". Score = Opportunity Prob * Hero Win Rate.
-          // We need to calc win rate for each candidate to sort.
-          // This is expensive? No, we have nextGamesA.
-          
-          // We only keep the best BEAM_WIDTH branches.
+          // Sort by Probability (Frequency) to find the most "Likely" lines.
+          // Previously we weighted by Win Rate, which favored 1-game-100%-win outliers.
           
           nextQueue.sort((a, b) => {
-              const scoreA = this._calcScore(a);
-              const scoreB = this._calcScore(b);
-              return scoreB - scoreA;
+              return b.prob - a.prob; // Descending probability
           });
           
-          queue = nextQueue.slice(0, BEAM_WIDTH * 2); // Keep top 10 per ply to allow diversity
+          queue = nextQueue.slice(0, BEAM_WIDTH * 2); // Keep top branches
       }
       
       // Add remaining queue items as leaf scenarios
@@ -677,23 +686,15 @@ export class DatabaseManager {
           scenarios.push(this._buildScenarioResult(item));
       }
       
-      // Final Sort for Display
+      // Final Sort for Display: Most likely first
       return scenarios.sort((a, b) => {
-          // Recalculate scores for final sort
-          // Score = oppProb * winRate
-          // We want to show the user the "Best" lines.
-          const scoreA = a.opportunityProb * this._getWinRate(a.heroStats);
-          const scoreB = b.opportunityProb * this._getWinRate(b.heroStats);
-          return scoreB - scoreA;
+          return b.probability - a.probability;
       }).slice(0, 50);
   }
 
   private _calcScore(node: any): number {
-      // Score = Opportunity Prob * Hero Win Rate
-      // Win Rate calculation from gamesA
-      const stats = this._getAggStats(node.gamesA);
-      const winRate = this._getWinRate(stats);
-      return node.oppProb * winRate;
+      // Deprecated in favor of direct probability sort for "Likely Lines"
+      return node.prob;
   }
 
   private _getAggStats(games: GameHeader[]) {

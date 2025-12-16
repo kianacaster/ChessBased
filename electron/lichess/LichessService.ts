@@ -1,7 +1,6 @@
 import { EventEmitter } from 'events';
 import fs from 'fs';
-import { Readable } from 'stream';
-import { pipeline } from 'stream/promises';
+import https from 'https';
 
 export interface LichessGameFilter {
   max?: number;
@@ -20,7 +19,7 @@ export interface LichessGameFilter {
 export class LichessService extends EventEmitter {
   private baseUrl = 'https://lichess.org/api';
 
-  public async fetchUserGames(username: string, filters: LichessGameFilter = {}): Promise<string> {
+  public fetchUserGames(username: string, filters: LichessGameFilter = {}): Promise<string> {
     const params = new URLSearchParams();
     if (filters.max) params.append('max', filters.max.toString());
     if (filters.rated !== undefined) params.append('rated', filters.rated.toString());
@@ -33,33 +32,43 @@ export class LichessService extends EventEmitter {
     if (filters.opening !== undefined) params.append('opening', filters.opening.toString());
 
     const url = `${this.baseUrl}/games/user/${username}?${params.toString()}`;
-    console.log('Fetching Lichess games from URL:', url); // Added for debugging
+    console.log('Fetching Lichess games from URL:', url);
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
-
-      const response = await fetch(url, {
+    return new Promise((resolve, reject) => {
+      const req = https.get(url, {
         headers: {
-          'Accept': 'application/x-chess-pgn'
+          'Accept': 'application/x-chess-pgn',
+          'User-Agent': 'ChessBased/1.0 (https://github.com/yourusername/chessbased; contact@example.com)'
         },
-        signal: controller.signal,
+        timeout: 60000, // 60s timeout
+        family: 4 // Force IPv4 to avoid ENETUNREACH/ETIMEDOUT on dual-stack networks
+      }, (res) => {
+        if (res.statusCode && res.statusCode >= 400) {
+          reject(new Error(`Lichess API error: ${res.statusCode} ${res.statusMessage}`));
+          res.resume(); // Consume response to free up memory
+          return;
+        }
+
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          resolve(data);
+        });
       });
-      clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        throw new Error(`Lichess API error: ${response.status} ${response.statusText}`);
-      }
+      req.on('error', (err) => {
+        console.error('Error fetching games from Lichess:', err);
+        reject(err);
+      });
 
-      const pgn = await response.text();
-      return pgn;
-    } catch (error) {
-      console.error('Error fetching games from Lichess:', error);
-      throw error;
-    }
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Lichess request timed out'));
+      });
+    });
   }
 
-  public async downloadUserGames(username: string, filePath: string, filters: LichessGameFilter = {}): Promise<void> {
+  public downloadUserGames(username: string, filePath: string, filters: LichessGameFilter = {}): Promise<void> {
     const params = new URLSearchParams();
     if (filters.max) params.append('max', filters.max.toString());
     if (filters.rated !== undefined) params.append('rated', filters.rated.toString());
@@ -74,32 +83,49 @@ export class LichessService extends EventEmitter {
     const url = `${this.baseUrl}/games/user/${username}?${params.toString()}`;
     console.log('Downloading Lichess games from URL:', url, 'to', filePath);
 
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/x-chess-pgn'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Lichess API error: ${response.status} ${response.statusText}`);
-      }
-      
-      if (!response.body) {
-          throw new Error('No body in response');
-      }
-
+    return new Promise((resolve, reject) => {
       const fileStream = fs.createWriteStream(filePath);
       
-      // Node 18 fetch returns a web stream, we need to convert or iterate
-      // @ts-ignore
-      await pipeline(Readable.fromWeb(response.body), fileStream);
-      
-      console.log('Download complete');
+      const req = https.get(url, {
+        headers: {
+          'Accept': 'application/x-chess-pgn',
+          'User-Agent': 'ChessBased/1.0 (https://github.com/yourusername/chessbased; contact@example.com)'
+        },
+        timeout: 120000, // 2 minutes for downloads
+        family: 4 // Force IPv4
+      }, (res) => {
+        if (res.statusCode && res.statusCode >= 400) {
+          fs.unlink(filePath, () => {}); // Delete partial file
+          reject(new Error(`Lichess API error: ${res.statusCode} ${res.statusMessage}`));
+          res.resume();
+          return;
+        }
 
-    } catch (error) {
-      console.error('Error downloading games from Lichess:', error);
-      throw error;
-    }
+        res.pipe(fileStream);
+
+        fileStream.on('finish', () => {
+          fileStream.close();
+          console.log('Download complete');
+          resolve();
+        });
+
+        fileStream.on('error', (err) => {
+          fs.unlink(filePath, () => {});
+          reject(err);
+        });
+      });
+
+      req.on('error', (err) => {
+        console.error('Error downloading games from Lichess:', err);
+        fs.unlink(filePath, () => {});
+        reject(err);
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        fs.unlink(filePath, () => {});
+        reject(new Error('Lichess download timed out'));
+      });
+    });
   }
 }

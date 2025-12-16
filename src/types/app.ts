@@ -93,8 +93,8 @@ export interface IElectronAPI {
   dbMerge: (sourceIds: string[], newName: string) => Promise<DatabaseEntry>;
   dbRemoveGames: (id: string, gameIndices: number[]) => Promise<void>;
   dbSearch: (dbIds: string[], moves: string[], filter?: GameFilter) => Promise<ExplorerResult>;
-  dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => Promise<PrepScenario[]>;
-  dbGetPrepScenarios: (dbIdsA: string[], dbIdsB: string[], moves: string[], limit: number) => Promise<PrepScenario[]>;
+  dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => Promise<PrepComparisonResult>;
+  dbGetPrepScenarios: (dbIdsA: string[], dbIdsB: string[], moves: string[], limit: number, context?: { heroName: string, opponentName: string, heroColor: 'white' | 'black' }) => Promise<PrepScenario[]>;
   extractPgnHeaders: (pgnContent: string) => Promise<GameHeader | null>;
   
   // Public Databases

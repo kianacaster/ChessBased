@@ -1,66 +1,121 @@
 import React, { useEffect, useState } from 'react';
-import type { DatabaseEntry, PrepComparisonResult, PrepScenario } from '../types/app';
-import { BookOpen, Filter, ArrowRightLeft, Users, GitBranch, Table, List } from 'lucide-react';
+import type { PrepComparisonResult, PrepScenario } from '../types/app';
+import { Users, GitBranch, Table, Download, Play, Search, AlertCircle, ArrowRightLeft } from 'lucide-react';
 import { clsx } from 'clsx';
+
+interface PrepState {
+  heroName: string;
+  opponentName: string;
+  heroColor: 'white' | 'black'; // Added
+  heroDbId: string | null;
+  opponentDbId: string | null;
+  result: PrepComparisonResult | null;
+  scenarios: PrepScenario[];
+  isLoading: boolean;
+  status: string;
+}
 
 interface PrepExplorerProps {
   historySan: string[];
   onPlayMove?: (san: string) => void;
   onLoadGame?: (pgn: string) => void;
   onPlayLine?: (moves: string[]) => void;
+  prepState: PrepState;
+  setPrepState: React.Dispatch<React.SetStateAction<PrepState>>;
 }
 
-const PrepExplorer: React.FC<PrepExplorerProps> = ({ historySan, onPlayMove, onLoadGame, onPlayLine }) => {
-  const [databases, setDatabases] = useState<DatabaseEntry[]>([]);
-  const [selectedIdsA, setSelectedIdsA] = useState<Set<string>>(new Set());
-  const [selectedIdsB, setSelectedIdsB] = useState<Set<string>>(new Set());
-  
-  const [result, setResult] = useState<PrepComparisonResult | null>(null);
-  const [scenarios, setScenarios] = useState<PrepScenario[]>([]);
-  
-  const [loading, setLoading] = useState(false);
-  const [showSelectors, setShowSelectors] = useState(false);
+const PrepExplorer: React.FC<PrepExplorerProps> = ({ historySan, onPlayMove, onLoadGame, onPlayLine, prepState, setPrepState }) => {
   const [viewMode, setViewMode] = useState<'table' | 'scenarios'>('scenarios');
 
-  useEffect(() => {
-    if (window.electronAPI) {
-        window.electronAPI.dbGetList().then(dbs => {
-            setDatabases(dbs);
-        });
-    }
-  }, []);
-
+  // Silent update when moves change
   useEffect(() => {
     if (!window.electronAPI) return;
-    if (selectedIdsA.size === 0 && selectedIdsB.size === 0) return;
-    
-    setLoading(true);
-    const timer = setTimeout(() => {
-        const p1 = window.electronAPI.dbCompare(Array.from(selectedIdsA), Array.from(selectedIdsB), historySan)
-            .then(setResult);
-            
-        const p2 = window.electronAPI.dbGetPrepScenarios(Array.from(selectedIdsA), Array.from(selectedIdsB), historySan, 6)
-            .then(setScenarios);
+    if (!prepState.heroDbId || !prepState.opponentDbId) return;
+    if (prepState.isLoading) return; 
+    if (!prepState.result) return;
 
-        Promise.all([p1, p2])
-            .catch(console.error)
-            .finally(() => setLoading(false));
+    const timer = setTimeout(() => {
+        // Pass context (names + color) to get specific filtered logic
+        const context = {
+            heroName: prepState.heroName,
+            opponentName: prepState.opponentName,
+            heroColor: prepState.heroColor
+        };
+
+        const p1 = window.electronAPI.dbCompare([prepState.heroDbId!], [prepState.opponentDbId!], historySan)
+            .then(res => setPrepState(prev => ({ ...prev, result: res })));
+            
+        const p2 = window.electronAPI.dbGetPrepScenarios([prepState.heroDbId!], [prepState.opponentDbId!], historySan, 6, context)
+            .then(scens => setPrepState(prev => ({ ...prev, scenarios: scens })));
+
+        Promise.all([p1, p2]).catch(console.error);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [historySan, selectedIdsA, selectedIdsB]);
+  }, [historySan, prepState.heroDbId, prepState.opponentDbId, prepState.heroColor]); // Added color dependency
 
-  const toggleDb = (id: string, group: 'A' | 'B') => {
-      if (group === 'A') {
-          const next = new Set(selectedIdsA);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          setSelectedIdsA(next);
-      } else {
-          const next = new Set(selectedIdsB);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          setSelectedIdsB(next);
+  const handlePrepare = async () => {
+      if (!prepState.heroName.trim() || !prepState.opponentName.trim()) return;
+      if (!window.electronAPI) return;
+      
+      setPrepState(prev => ({ ...prev, isLoading: true, status: 'Initializing...', result: null, scenarios: [] }));
+      
+      try {
+          if (prepState.heroDbId) window.electronAPI.dbDelete(prepState.heroDbId).catch(() => {});
+          if (prepState.opponentDbId) window.electronAPI.dbDelete(prepState.opponentDbId).catch(() => {});
+
+          // 1. Fetch Hero
+          setPrepState(prev => ({ ...prev, status: `Fetching games for ${prev.heroName}...` }));
+          // Fetch ALL games to ensure we get enough of specific color
+          const heroFilter = { perfType: 'blitz,rapid,classical', max: 1000, color: prepState.heroColor };
+          const heroPgn = await window.electronAPI.fetchLichessGames(prepState.heroName, heroFilter);
+          
+          if (!heroPgn) throw new Error(`No games found for ${prepState.heroName} as ${prepState.heroColor}`);
+          
+          const heroDbName = `prep_hero_${prepState.heroName}_${Date.now()}`;
+          const heroEntry = await window.electronAPI.dbCreate(heroDbName);
+          await window.electronAPI.dbAddGame(heroEntry.id, heroPgn);
+          
+          // 2. Fetch Opponent
+          setPrepState(prev => ({ ...prev, status: `Fetching games for ${prev.opponentName}...` }));
+          // Opponent plays opposite color
+          const oppColor: 'white' | 'black' = prepState.heroColor === 'white' ? 'black' : 'white';
+          const opponentFilter = { perfType: 'blitz,rapid,classical', max: 1000, color: oppColor };
+          const oppPgn = await window.electronAPI.fetchLichessGames(prepState.opponentName, opponentFilter);
+          
+          if (!oppPgn) throw new Error(`No games found for ${prepState.opponentName} as ${oppColor}`);
+
+          const oppDbName = `prep_opp_${prepState.opponentName}_${Date.now()}`;
+          const oppEntry = await window.electronAPI.dbCreate(oppDbName);
+          await window.electronAPI.dbAddGame(oppEntry.id, oppPgn);
+          
+          // 3. Analyze
+          setPrepState(prev => ({ ...prev, status: 'Analyzing...', heroDbId: heroEntry.id, opponentDbId: oppEntry.id }));
+          
+          const context = {
+            heroName: prepState.heroName,
+            opponentName: prepState.opponentName,
+            heroColor: prepState.heroColor
+          };
+
+          const res = await window.electronAPI.dbCompare([heroEntry.id], [oppEntry.id], historySan);
+          const scens = await window.electronAPI.dbGetPrepScenarios([heroEntry.id], [oppEntry.id], historySan, 6, context);
+          
+          setPrepState(prev => ({ 
+              ...prev, 
+              result: res, 
+              scenarios: scens, 
+              isLoading: false, 
+              status: '' 
+          }));
+          
+      } catch (e: any) {
+          console.error("Prep failed", e);
+          setPrepState(prev => ({ 
+              ...prev, 
+              isLoading: false, 
+              status: 'Error: ' + (e.message || 'Failed') 
+          }));
       }
   };
 
@@ -76,94 +131,113 @@ const PrepExplorer: React.FC<PrepExplorerProps> = ({ historySan, onPlayMove, onL
              <Users size={16} />
              <span>Prep Tool</span>
          </div>
-         <div className="flex space-x-1">
-             <button 
-               onClick={() => setViewMode('scenarios')}
-               className={clsx(
-                   "p-1.5 rounded hover:bg-muted transition-colors",
-                   viewMode === 'scenarios' ? "text-primary bg-primary/10" : "text-muted-foreground"
-               )}
-               title="Likely Scenarios"
-             >
-                 <GitBranch size={16} />
-             </button>
-             <button 
-               onClick={() => setViewMode('table')}
-               className={clsx(
-                   "p-1.5 rounded hover:bg-muted transition-colors",
-                   viewMode === 'table' ? "text-primary bg-primary/10" : "text-muted-foreground"
-               )}
-               title="Move Table"
-             >
-                 <Table size={16} />
-             </button>
-             <button 
-               onClick={() => setShowSelectors(!showSelectors)}
-               className={clsx(
-                   "p-1.5 rounded hover:bg-muted transition-colors ml-2",
-                   showSelectors ? "text-primary bg-primary/10" : "text-muted-foreground"
-               )}
-               title="Select Databases"
-             >
-                 <Filter size={16} />
-             </button>
-         </div>
+         {prepState.result && (
+             <div className="flex space-x-1">
+                 <button 
+                   onClick={() => setViewMode('scenarios')}
+                   className={clsx(
+                       "p-1.5 rounded hover:bg-muted transition-colors",
+                       viewMode === 'scenarios' ? "text-primary bg-primary/10" : "text-muted-foreground"
+                   )}
+                   title="Likely Scenarios"
+                 >
+                     <GitBranch size={16} />
+                 </button>
+                 <button 
+                   onClick={() => setViewMode('table')}
+                   className={clsx(
+                       "p-1.5 rounded hover:bg-muted transition-colors",
+                       viewMode === 'table' ? "text-primary bg-primary/10" : "text-muted-foreground"
+                   )}
+                   title="Move Table"
+                 >
+                     <Table size={16} />
+                 </button>
+             </div>
+         )}
       </div>
 
-      {showSelectors && (
-          <div className="p-3 bg-muted/30 border-b border-border text-sm max-h-60 overflow-y-auto grid grid-cols-2 gap-4">
+      <div className="p-4 border-b border-border bg-card">
+          <div className="space-y-3">
               <div>
-                  <div className="font-bold text-xs uppercase text-blue-500 mb-2">Hero (Me)</div>
-                  <div className="space-y-1">
-                      {databases.map(db => (
-                          <label key={`a-${db.id}`} className="flex items-center space-x-2 cursor-pointer hover:bg-muted p-1 rounded">
-                              <input 
-                                type="checkbox" 
-                                checked={selectedIdsA.has(db.id)}
-                                onChange={() => toggleDb(db.id, 'A')}
-                                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
-                              />
-                              <span className="truncate">{db.name}</span>
-                          </label>
-                      ))}
+                  <label className="text-xs font-medium text-muted-foreground uppercase">Hero (You)</label>
+                  <div className="flex space-x-2 mt-1">
+                      <input 
+                          type="text" 
+                          value={prepState.heroName}
+                          onChange={(e) => setPrepState(prev => ({ ...prev, heroName: e.target.value }))}
+                          placeholder="Lichess Username"
+                          className="flex-1 bg-input border border-border rounded px-2 py-1.5 text-sm"
+                      />
+                      <div className="flex bg-muted rounded p-0.5">
+                          <button
+                              onClick={() => setPrepState(prev => ({ ...prev, heroColor: 'white' }))}
+                              className={clsx(
+                                  "px-2 py-1 rounded text-xs font-medium transition-colors",
+                                  prepState.heroColor === 'white' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                              )}
+                          >
+                              White
+                          </button>
+                          <button
+                              onClick={() => setPrepState(prev => ({ ...prev, heroColor: 'black' }))}
+                              className={clsx(
+                                  "px-2 py-1 rounded text-xs font-medium transition-colors",
+                                  prepState.heroColor === 'black' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                              )}
+                          >
+                              Black
+                          </button>
+                      </div>
                   </div>
               </div>
               <div>
-                  <div className="font-bold text-xs uppercase text-red-500 mb-2">Opponent</div>
-                  <div className="space-y-1">
-                      {databases.map(db => (
-                          <label key={`b-${db.id}`} className="flex items-center space-x-2 cursor-pointer hover:bg-muted p-1 rounded">
-                              <input 
-                                type="checkbox" 
-                                checked={selectedIdsB.has(db.id)}
-                                onChange={() => toggleDb(db.id, 'B')}
-                                className="rounded border-gray-300 text-red-500 focus:ring-red-500"
-                              />
-                              <span className="truncate">{db.name}</span>
-                          </label>
-                      ))}
-                  </div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase">Opponent</label>
+                  <input 
+                      type="text" 
+                      value={prepState.opponentName}
+                      onChange={(e) => setPrepState(prev => ({ ...prev, opponentName: e.target.value }))}
+                      placeholder="Lichess Username"
+                      className="w-full mt-1 bg-input border border-border rounded px-2 py-1.5 text-sm"
+                  />
               </div>
+              <button 
+                  onClick={handlePrepare}
+                  disabled={prepState.isLoading || !prepState.heroName || !prepState.opponentName}
+                  className="w-full py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                  {prepState.isLoading ? <Search size={16} className="animate-spin" /> : <Play size={16} />}
+                  <span>{prepState.isLoading ? prepState.status || 'Analyzing...' : 'Prepare Strategy'}</span>
+              </button>
           </div>
-      )}
+      </div>
 
       <div className="flex-1 overflow-y-auto">
-          {loading ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">Analyzing...</div>
-          ) : (!result && scenarios.length === 0) ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">Select databases for Hero and Opponent to start.</div>
+          {prepState.isLoading ? (
+              <div className="p-8 text-center text-muted-foreground text-sm flex flex-col items-center space-y-2">
+                  <Download className="animate-bounce w-6 h-6 opacity-50" />
+                  <span>{prepState.status}</span>
+              </div>
+          ) : (!prepState.result && prepState.scenarios.length === 0) ? (
+              <div className="p-8 text-center text-muted-foreground text-sm flex flex-col items-center space-y-3 opacity-60">
+                  <ArrowRightLeft size={32} />
+                  <p>Enter usernames above to analyze opening trends and find winning lines.</p>
+                  {prepState.status.startsWith('Error') && (
+                      <div className="text-red-500 bg-red-500/10 p-2 rounded">{prepState.status}</div>
+                  )}
+              </div>
           ) : (
               <>
-                  {viewMode === 'table' && result && (
+                  {viewMode === 'table' && prepState.result && (
                       <div className="flex flex-col">
                           {/* Summary */}
                           <div className="p-4 border-b border-border grid grid-cols-2 gap-4">
                               <div className="text-center">
-                                  <div className="text-2xl font-bold text-blue-500">{result.statsA.totalGames}</div>
+                                  <div className="text-2xl font-bold text-blue-500">{prepState.result.statsA.totalGames}</div>
                                   <div className="text-xs text-muted-foreground uppercase">Hero Games</div>
                               </div>
                               <div className="text-center">
-                                  <div className="text-2xl font-bold text-red-500">{result.statsB.totalGames}</div>
+                                  <div className="text-2xl font-bold text-red-500">{prepState.result.statsB.totalGames}</div>
                                   <div className="text-xs text-muted-foreground uppercase">Opp Games</div>
                               </div>
                           </div>
@@ -179,7 +253,7 @@ const PrepExplorer: React.FC<PrepExplorerProps> = ({ historySan, onPlayMove, onL
                                   </tr>
                               </thead>
                               <tbody>
-                                  {result.moves.map((move, i) => {
+                                  {prepState.result.moves.map((move, i) => {
                                       const scoreA = getWinRate(move.statsA);
                                       const scoreB = getWinRate(move.statsB);
                                       const diff = scoreA - scoreB;
@@ -225,7 +299,7 @@ const PrepExplorer: React.FC<PrepExplorerProps> = ({ historySan, onPlayMove, onL
                               <span>Prob.</span>
                           </div>
                           <div className="divide-y divide-border/50">
-                              {scenarios.map((scenario, i) => {
+                              {prepState.scenarios.map((scenario, i) => {
                                   const winRate = getWinRate(scenario.heroStats);
                                   const games = scenario.heroStats.total;
                                   
@@ -278,7 +352,7 @@ const PrepExplorer: React.FC<PrepExplorerProps> = ({ historySan, onPlayMove, onL
                                       </div>
                                   );
                               })}
-                              {scenarios.length === 0 && (
+                              {prepState.scenarios.length === 0 && (
                                   <div className="p-8 text-center text-muted-foreground text-sm">
                                       No scenarios found matching criteria.
                                   </div>

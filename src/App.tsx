@@ -15,8 +15,20 @@ import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, La
 import * as React from 'react';
 import { clsx } from 'clsx';
 import { parseUciInfo, type EngineInfo } from './utils/engine';
-import type { DatabaseEntry } from './types/app';
+import type { DatabaseEntry, PrepComparisonResult, PrepScenario } from './types/app';
 import type { DrawShape } from './types/chess';
+
+interface PrepState {
+  heroName: string;
+  opponentName: string;
+  heroColor: 'white' | 'black';
+  heroDbId: string | null;
+  opponentDbId: string | null;
+  result: PrepComparisonResult | null;
+  scenarios: PrepScenario[];
+  isLoading: boolean;
+  status: string;
+}
 
 interface SidebarItemProps {
   icon: React.ElementType;
@@ -71,6 +83,19 @@ function App() {
       else next.add(id);
       setExplorerDbIds(next);
   };
+  
+  // Prep State (Lifted for persistence)
+  const [prepState, setPrepState] = React.useState<PrepState>({
+      heroName: '',
+      opponentName: '',
+      heroColor: 'white', // Default
+      heroDbId: null,
+      opponentDbId: null,
+      result: null,
+      scenarios: [],
+      isLoading: false,
+      status: ''
+  });
 
   // Load engine path on startup
   React.useEffect(() => {
@@ -515,6 +540,8 @@ function App() {
                             playLine(moves);
                             setAnalysisTab('notation');
                         }}
+                        prepState={prepState}
+                        setPrepState={setPrepState}
                       />
                   )}
                 </div>
