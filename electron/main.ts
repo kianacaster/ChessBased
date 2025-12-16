@@ -256,14 +256,28 @@ ipcMain.handle('get-installed-engines', async () => {
                 if (stats && stats.isDirectory()) {
                     results = results.concat(await getFiles(filePath, depth + 1));
                 } else {
-                    // Filter for likely executables? 
-                    // On Linux, binaries often have no extension. On Windows .exe.
-                    // Let's exclude .zip, .tar, .json, etc if we want, but for now include everything executable-ish?
-                    // Actually, let's just return all files and let frontend/user decide, 
-                    // OR filter by executable permission on Linux?
-                    // Simplest: exclude common non-executable extensions.
+                    const isWindows = process.platform === 'win32';
                     const ext = path.extname(file).toLowerCase();
-                    if (!['.zip', '.tar', '.gz', '.tgz', '.rar', '.json', '.txt', '.md'].includes(ext)) {
+                    let isExecutable = false;
+
+                    if (isWindows) {
+                        isExecutable = ext === '.exe';
+                    } else {
+                        // On Linux/Mac, check for execute permission
+                        try {
+                            await fs.access(filePath, fs.constants.X_OK);
+                            // Additionally exclude common non-binary extensions to be safe
+                            // (e.g. scripts that might have +x but aren't engines)
+                            const ignoredExts = ['.sh', '.bash', '.py', '.js', '.c', '.cpp', '.h', '.hpp', '.o', '.a', '.txt', '.md', '.json', '.xml', '.zip', '.tar', '.gz'];
+                            if (!ignoredExts.includes(ext) && !file.startsWith('.')) {
+                                isExecutable = true;
+                            }
+                        } catch (err) {
+                            isExecutable = false;
+                        }
+                    }
+
+                    if (isExecutable) {
                          results.push({ name: file, path: filePath });
                     }
                 }
