@@ -249,13 +249,17 @@ const PrepExplorer: React.FC<PrepExplorerProps> = ({ historySan, onPlayMove, onL
                                           
                                           <div className="flex items-center justify-between text-xs">
                                               <div className="flex items-center space-x-2">
-                                                  <span className={clsx(
-                                                      "font-bold",
-                                                      winRate > 55 ? "text-green-500" : winRate < 45 ? "text-red-500" : "text-muted-foreground"
-                                                  )}>
-                                                      Hero Score: {winRate.toFixed(0)}%
-                                                  </span>
-                                                  <span className="text-muted-foreground">({games} games)</span>
+                                                  <button 
+                                                    className="text-muted-foreground hover:text-primary hover:underline"
+                                                    onClick={() => {
+                                                        if (onLoadGame && scenario.heroStats.exampleGame) {
+                                                            onLoadGame(scenario.heroStats.exampleGame);
+                                                        }
+                                                    }}
+                                                    title="Load Example Game"
+                                                  >
+                                                      ({games} games)
+                                                  </button>
                                               </div>
                                               <button 
                                                 className="text-primary hover:underline"

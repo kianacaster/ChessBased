@@ -6,6 +6,7 @@ import { makeFen, parseFen } from 'chessops/fen';
 import { makeSan, parseSan } from 'chessops/san';
 import type { NormalMove } from 'chessops/types';
 import type { TreeNode } from '../types/chess';
+import type { GameHeader } from '../types/app'; // Added GameHeader import
 
 export interface MoveData {
   uci: string;
@@ -26,6 +27,7 @@ interface UseGameResult {
   currentNode: TreeNode;
   goToNode: (id: string) => void;
   lastMove?: [string, string];
+  gameMetadata: GameHeader | null; // Added gameMetadata to interface
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 10);
@@ -49,10 +51,12 @@ const useGame = (): UseGameResult => {
   // Initialize rootId and currentNodeId based on the initial nodes
   const [rootId, setRootId] = useState(() => Object.keys(nodes)[0]);
   const [currentNodeId, setCurrentNodeId] = useState(() => Object.keys(nodes)[0]);
+  const [gameMetadata, setGameMetadata] = useState<GameHeader | null>(null); // Added gameMetadata state
 
   useEffect(() => {
     // console.log('Current Node ID:', currentNodeId);
   }, [currentNodeId]);
+
 
   // Helper to get path from root to a specific node
   const getPath = useCallback((targetId: string, currentNodes: Record<string, TreeNode>) => {

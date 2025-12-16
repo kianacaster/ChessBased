@@ -149,6 +149,19 @@ ipcMain.handle('db-get-prep-scenarios', async (event, dbIdsA: string[], dbIdsB: 
     return databaseManager.getPrepScenarios(dbIdsA, dbIdsB, rootMoves, depth);
 });
 
+ipcMain.handle('db-extract-pgn-headers', async (event, pgnContent: string) => {
+  try {
+    // GameDatabase.extractHeadersFromPgn takes pgnContent and returns GameHeader[].
+    // Since we only expect one game, we take the first.
+    gameDatabase.clearGames(); // Clear any previous state
+    const headers = await gameDatabase.extractHeadersFromPgn(pgnContent);
+    return headers.length > 0 ? headers[0] : null;
+  } catch (error) {
+    console.error('Failed to extract PGN headers:', error);
+    return null;
+  }
+});
+
 ipcMain.handle('open-pgn-file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],

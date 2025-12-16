@@ -43,7 +43,7 @@ const SidebarItem = ({
 );
 
 function App() {
-  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove, loadPgn, exportPgn, goBack, goForward, goToStart, goToEnd, playSan, playLine } = useGame();
+  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove, loadPgn, exportPgn, goBack, goForward, goToStart, goToEnd, playSan, playLine, gameMetadata } = useGame();
   
   // Engine State
   const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
@@ -343,11 +343,13 @@ function App() {
              
              <div className="w-full px-6 py-4 flex items-center justify-between z-10">
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">White Player vs Black Player</h2>
+                  <h2 className="text-lg font-semibold text-foreground">
+                    {gameMetadata ? `${gameMetadata.White || 'White'} vs ${gameMetadata.Black || 'Black'}` : 'White Player vs Black Player'}
+                  </h2>
                   <div className="text-xs text-muted-foreground mt-0.5 flex items-center space-x-2">
-                     <span>Event Name</span>
+                     <span>{gameMetadata?.Event || 'Event Name'}</span>
                      <span className="w-1 h-1 rounded-full bg-muted-foreground/50" />
-                     <span>2024</span>
+                     <span>{gameMetadata?.Date ? gameMetadata.Date.substring(0,4) : '2024'}</span>
                   </div>
                 </div>
                 <div className="flex space-x-2">
@@ -415,7 +417,7 @@ function App() {
                       <DatabaseExplorer 
                         historySan={history.map(m => m.san)}
                         onPlayMove={(san) => {
-                            console.log("Play move", san);
+                            playSan(san);
                         }}
                         onLoadGame={(pgn) => {
                             loadPgn(pgn);

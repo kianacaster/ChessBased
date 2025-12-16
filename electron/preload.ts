@@ -48,4 +48,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbSearch: (dbIds: string[], moves: string[]) => ipcRenderer.invoke('db-search', dbIds, moves),
   dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => ipcRenderer.invoke('db-compare', dbIdsA, dbIdsB, moves),
   dbGetPrepScenarios: (dbIdsA: string[], dbIdsB: string[], rootMoves: string[], depth: number) => ipcRenderer.invoke('db-get-prep-scenarios', dbIdsA, dbIdsB, rootMoves, depth),
+  extractPgnHeaders: (pgnContent: string) => ipcRenderer.invoke('db-extract-pgn-headers', pgnContent),
 });

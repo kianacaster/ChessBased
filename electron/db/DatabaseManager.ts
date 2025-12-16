@@ -581,7 +581,7 @@ export class DatabaseManager {
           else if (g.Result === '0-1') b++;
           else d++;
       }
-      return { w, d, b, total: games.length };
+      return { w, d, b, total: games.length, exampleGame: games.length > 0 ? games[0].pgn : null };
   }
 
   private _getWinRate(stats: { w: number, d: number, b: number, total: number }): number {
