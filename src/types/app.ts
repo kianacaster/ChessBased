@@ -79,4 +79,5 @@ export interface IElectronAPI {
   dbImport: () => Promise<DatabaseEntry | null>;
   dbLoadGames: (id: string) => Promise<GameHeader[]>;
   dbAddGame: (id: string, pgn: string) => Promise<void>;
+  dbDelete: (id: string) => Promise<void>;
 }
