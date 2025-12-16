@@ -379,10 +379,10 @@ function App() {
                            "text-2xl font-bold",
                            engineInfo.score.unit === 'mate' 
                              ? "text-pink-500" 
-                             : (engineInfo.score.value > 0 ? "text-green-400" : (engineInfo.score.value < 0 ? "text-red-400" : "text-gray-400"))
+                             : ((engineInfo.score.value * (turn === 'white' ? 1 : -1)) > 0 ? "text-green-400" : ((engineInfo.score.value * (turn === 'white' ? 1 : -1)) < 0 ? "text-red-400" : "text-gray-400"))
                          )}>
                            {engineInfo.score.unit === 'cp' 
-                             ? (engineInfo.score.value / 100).toFixed(2) 
+                             ? ((engineInfo.score.value * (turn === 'white' ? 1 : -1)) / 100).toFixed(2) 
                              : `#${engineInfo.score.value}`}
                          </span>
                          <div className="flex flex-col text-xs text-muted-foreground">
