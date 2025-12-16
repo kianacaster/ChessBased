@@ -1,5 +1,7 @@
 // electron/db/Database.ts
 
+import { getEco } from '../utils/eco-data';
+
 export interface GameHeader {
   Event: string;
   Site: string;
