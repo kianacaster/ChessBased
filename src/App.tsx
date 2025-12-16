@@ -6,7 +6,8 @@ import LichessImport from './components/LichessImport';
 import EngineManager from './components/EngineManager';
 import DatabaseList from './components/DatabaseList';
 import DatabaseView from './components/DatabaseView';
-import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft } from 'lucide-react';
+import SaveToDatabaseModal from './components/SaveToDatabaseModal';
+import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft, PlusCircle } from 'lucide-react';
 import * as React from 'react';
 import { clsx } from 'clsx';
 import { parseUciInfo, type EngineInfo } from './utils/engine';
@@ -53,6 +54,7 @@ function App() {
   const [engineDisplayName, setEngineDisplayName] = React.useState<string>('');
   
   const [selectedDatabase, setSelectedDatabase] = React.useState<DatabaseEntry | null>(null);
+  const [showSaveDbModal, setShowSaveDbModal] = React.useState(false);
 
   // Load engine path on startup
   React.useEffect(() => {
@@ -125,10 +127,23 @@ function App() {
     }
   };
   
-  const handleSaveGame = async () => {
+  const handleSaveGameFile = async () => {
       const pgn = exportPgn();
       if (window.electronAPI) {
           await window.electronAPI.savePgnFile(pgn);
+      }
+  };
+  
+  const handleSaveToDb = async (dbId: string) => {
+      const pgn = exportPgn();
+      if (window.electronAPI) {
+          try {
+             await window.electronAPI.dbAddGame(dbId, pgn);
+             setShowSaveDbModal(false);
+             // Optional: Show success toast
+          } catch (e) {
+              console.error("Failed to save to DB", e);
+          }
       }
   };
 
@@ -173,17 +188,14 @@ function App() {
       setCurrentView('databaseDetail');
   };
   
-  const handleLoadGameFromDb = (pgn: string) => {
-      // In DatabaseView, we currently pass index/header. 
-      // But if we upgrade DatabaseView to pass the full PGN (extracted from headers if we store it), 
-      // or fetch it, we use it here.
-      // Note: DatabaseView currently calls `handleGameClick` which does nothing.
-      // I need to update DatabaseView to pass the PGN. 
-      // Since I updated Database.ts to include `pgn` in GameHeader, I can access it there.
-  };
-
   return (
     <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden font-sans">
+      {showSaveDbModal && (
+          <SaveToDatabaseModal 
+             onClose={() => setShowSaveDbModal(false)}
+             onSave={handleSaveToDb}
+          />
+      )}
       <Layout
         sidebar={
           <div className="flex flex-col h-full bg-sidebar">
@@ -238,18 +250,22 @@ function App() {
                <div className="flex items-center justify-between mb-3 px-2">
                   <span className="text-xs font-medium text-muted-foreground">Quick Actions</span>
                </div>
-               <div className="grid grid-cols-3 gap-2">
+               <div className="grid grid-cols-4 gap-2">
                   <button onClick={handleOpenFile} className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-accent-foreground transition-colors" title="Open PGN">
                     <FolderOpen size={18} />
                     <span className="text-[10px] mt-1">Open</span>
                   </button>
+                   <button onClick={() => setShowSaveDbModal(true)} className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-accent-foreground transition-colors" title="Save to Database">
+                    <PlusCircle size={18} />
+                    <span className="text-[10px] mt-1">Add to DB</span>
+                  </button>
+                   <button onClick={handleSaveGameFile} className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-accent-foreground transition-colors" title="Save to PGN File">
+                    <Save size={18} />
+                    <span className="text-[10px] mt-1">Save File</span>
+                  </button>
                    <button onClick={triggerManualEngineSelection} className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-accent-foreground transition-colors" title="Select Engine">
                     <Cpu size={18} />
                     <span className="text-[10px] mt-1">Engine</span>
-                  </button>
-                   <button onClick={handleSaveGame} className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-accent-foreground transition-colors" title="Save Game">
-                    <Save size={18} />
-                    <span className="text-[10px] mt-1">Save</span>
                   </button>
                </div>
                

@@ -113,6 +113,10 @@ export class DatabaseManager {
       if (!db) throw new Error('Database not found');
       
       try {
+          // Ensure directory exists
+          const dir = path.dirname(db.path);
+          await fs.mkdir(dir, { recursive: true });
+
           // Ensure newline separation
           const contentToAppend = `
 
@@ -124,7 +128,7 @@ ${pgn}
           // Update last modified
           const stats = await fs.stat(db.path);
           db.lastModified = stats.mtimeMs;
-          db.gameCount += 1; // Approximation
+          db.gameCount += 1; // Approximation;
           await this.saveDatabases();
       } catch (error) {
           throw new Error(`Failed to save game to database: ${error}`);
