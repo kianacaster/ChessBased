@@ -71,27 +71,28 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
     // Apply Advanced Filters BEFORE move filtering to reduce set size
     if (filter) {
         allGames = allGames.filter(g => {
-            if (filter.white && !g.White?.toLowerCase().includes(filter.white.toLowerCase())) return false;
-            if (filter.black && !g.Black?.toLowerCase().includes(filter.black.toLowerCase())) return false;
-            if (filter.event && !g.Event?.toLowerCase().includes(filter.event.toLowerCase())) return false;
-            if (filter.result && g.Result !== filter.result) return false;
+            const white = Array.isArray(g.White) ? g.White[0] : g.White;
+            const black = Array.isArray(g.Black) ? g.Black[0] : g.Black;
+            const event = Array.isArray(g.Event) ? g.Event[0] : g.Event;
+            const date = Array.isArray(g.Date) ? g.Date[0] : g.Date;
+            const result = Array.isArray(g.Result) ? g.Result[0] : g.Result;
+            const whiteElo = parseInt((Array.isArray(g.WhiteElo) ? g.WhiteElo[0] : g.WhiteElo) || '0');
+            const blackElo = parseInt((Array.isArray(g.BlackElo) ? g.BlackElo[0] : g.BlackElo) || '0');
+
+            if (filter.white && !white?.toLowerCase().includes(filter.white.toLowerCase())) return false;
+            if (filter.black && !black?.toLowerCase().includes(filter.black.toLowerCase())) return false;
+            if (filter.event && !event?.toLowerCase().includes(filter.event.toLowerCase())) return false;
+            if (filter.result && result !== filter.result) return false;
             
             if (filter.dateStart || filter.dateEnd) {
                 // Dates in PGN are YYYY.MM.DD
-                const gameDate = g.Date || '';
+                const gameDate = date || '';
                 if (filter.dateStart && gameDate < filter.dateStart) return false;
                 if (filter.dateEnd && gameDate > filter.dateEnd) return false;
             }
 
             if (filter.minElo || filter.maxElo) {
-                const whiteElo = parseInt(g.WhiteElo || '0');
-                const blackElo = parseInt(g.BlackElo || '0');
-                const avgElo = (whiteElo + blackElo) / 2; // Approximate or check both? Usually filtering by player strength.
-                // Let's check if *either* player matches requirements or average? 
-                // Standard behavior: Games where AT LEAST ONE player meets criteria? Or BOTH?
-                // Usually "Games with White > X" is specific.
-                // If just "Min Elo", typically implies average or min of both.
-                // Let's go with: Average Elo must be in range (if both exist), or Single Elo if one exists.
+                const avgElo = (whiteElo + blackElo) / 2;
                 
                 let effectiveElo = 0;
                 if (whiteElo && blackElo) effectiveElo = (whiteElo + blackElo) / 2;
