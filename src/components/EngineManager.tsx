@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import type { EngineMetadata } from '../../electron/engines/engine-types';
+import type { EngineMetadata } from '../types/app';
 import { Download, Loader2, Cpu } from 'lucide-react';
 import { clsx } from 'clsx';
 
