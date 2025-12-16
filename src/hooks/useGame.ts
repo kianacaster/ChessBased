@@ -298,6 +298,31 @@ const useGame = (): UseGameResult => {
       return pgn + moveString.trim() + ' *';
   }, [history]);
 
+  const goBack = useCallback(() => {
+      if (currentNode.parentId) {
+          setCurrentNodeId(currentNode.parentId);
+      }
+  }, [currentNode]);
+
+  const goForward = useCallback(() => {
+      if (currentNode.children.length > 0) {
+          setCurrentNodeId(currentNode.children[0]);
+      }
+  }, [currentNode]);
+
+  const goToStart = useCallback(() => {
+      setCurrentNodeId(rootId);
+  }, [rootId]);
+
+  const goToEnd = useCallback(() => {
+      let curr = currentNode;
+      // Go to end of main line from current position
+      while (curr.children.length > 0) {
+          curr = nodes[curr.children[0]];
+      }
+      setCurrentNodeId(curr.id);
+  }, [currentNode, nodes]);
+
   return { 
     fen: currentNode.fen, 
     turn, 
@@ -311,7 +336,11 @@ const useGame = (): UseGameResult => {
     goToNode,
     lastMove,
     loadPgn,
-    exportPgn
+    exportPgn,
+    goBack,
+    goForward,
+    goToStart,
+    goToEnd
   };
 };
 

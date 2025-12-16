@@ -41,7 +41,7 @@ const SidebarItem = ({
 );
 
 function App() {
-  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove, loadPgn, exportPgn } = useGame();
+  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove, loadPgn, exportPgn, goBack, goForward, goToStart, goToEnd } = useGame();
   
   // Engine State
   const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
@@ -97,6 +97,34 @@ function App() {
       });
     }
   }, [fen, isEngineRunning, enginePath, isDeepAnalysis]);
+
+  // Keyboard navigation
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Avoid interfering with inputs
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          goBack();
+          break;
+        case 'ArrowRight':
+          goForward();
+          break;
+        case 'ArrowUp':
+          goToStart();
+          break;
+        case 'ArrowDown':
+          goToEnd();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [goBack, goForward, goToStart, goToEnd]);
 
   const handleMove = (orig: string, dest: string) => {
     move(orig, dest);
