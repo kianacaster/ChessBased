@@ -6,7 +6,7 @@ import { makeFen, parseFen } from 'chessops/fen';
 import { makeSan, parseSan } from 'chessops/san';
 import type { NormalMove } from 'chessops/types';
 import type { TreeNode, DrawShape } from '../types/chess';
-import type { GameHeader } from '../types/app'; // Added GameHeader import
+import type { GameHeader } from '../types/app';
 
 export interface MoveData {
   uci: string;
@@ -27,7 +27,7 @@ interface UseGameResult {
   currentNode: TreeNode;
   goToNode: (id: string) => void;
   lastMove?: [string, string];
-  gameMetadata: GameHeader | null; // Added gameMetadata to interface
+  gameMetadata: GameHeader | null;
   
   exportPgn: () => string;
   goBack: () => void;
@@ -66,7 +66,7 @@ const useGame = (): UseGameResult => {
   // Initialize rootId and currentNodeId based on the initial nodes
   const [rootId, setRootId] = useState(() => Object.keys(nodes)[0]);
   const [currentNodeId, setCurrentNodeId] = useState(() => Object.keys(nodes)[0]);
-  const [gameMetadata, setGameMetadata] = useState<GameHeader | null>(null); // Added gameMetadata state
+  const [gameMetadata, setGameMetadata] = useState<GameHeader | null>(null); 
 
   const setNodeComment = useCallback((id: string, comment: string) => {
     setNodes(prev => {
@@ -191,7 +191,9 @@ const useGame = (): UseGameResult => {
       move: { uci: uciString, san },
       children: [],
       parentId: currentNodeId,
-      comments: []
+      comments: [],
+      nags: [],
+      shapes: []
     };
 
     setNodes(prev => {
@@ -237,7 +239,7 @@ const useGame = (): UseGameResult => {
 
   const loadPgn = useCallback((pgn: string) => {
       // Extract headers
-      const headerRegex = /\[(\w+)\s+"(.*?)"\]/g;
+      const headerRegex = /\s*\[(\w+)\s+"(.*?)"\]/g;
       let match;
       const headers: any = {};
       while ((match = headerRegex.exec(pgn)) !== null) {
@@ -246,13 +248,13 @@ const useGame = (): UseGameResult => {
       setGameMetadata(headers as GameHeader);
       
       // Remove headers for body parsing
-      const body = pgn.replace(/\[.*?\]/gs, '');
+      const body = pgn.replace(/\s*\[.*?\]/gs, '');
       
       // Tokenize body
       // Matches: {Comment}, $NAG, (, ), Move Number, SAN, Result
+      // Fixed regex for NAGs ($1, $20 etc) and Moves (1. or 1...)
       const regex = /\{([\s\S]*?)\}|(\$\d+)|\(|\)|(\d+\.+)|([a-zA-Z0-9+=#\-]+)|(\*|1-0|0-1|1\/2-1\/2)/g;
       
-      // Reset game
       const newRootId = generateId();
       const newNodes: Record<string, TreeNode> = {
           [newRootId]: {
@@ -268,7 +270,7 @@ const useGame = (): UseGameResult => {
       
       let currentId = newRootId;
       let currentChess = Chess.default();
-      let variationDepth = 0; // 0 = main line
+      let variationDepth = 0; 
       
       let token;
       while ((token = regex.exec(body)) !== null) {
@@ -276,12 +278,10 @@ const useGame = (): UseGameResult => {
           
           if (comment) {
               if (variationDepth === 0) {
-                  // Add comment to current node
                   let text = comment.trim();
                   const shapes: DrawShape[] = [];
                   
-                  // Extract shapes [%cal ...] [%csl ...]
-                  const shapeRegex = /\[%(cal|csl)\s+(.*?)\]/g;
+                  const shapeRegex = /\s*\[%(cal|csl)\s+(.*?)\]/g;
                   let shapeMatch;
                   while ((shapeMatch = shapeRegex.exec(text)) !== null) {
                       const type = shapeMatch[1];
@@ -289,7 +289,6 @@ const useGame = (): UseGameResult => {
                       data.forEach(d => {
                          d = d.trim();
                          if (!d) return;
-                         // Format: G<orig><dest> or G<orig>
                          const colorCode = d.charAt(0);
                          const rest = d.substring(1);
                          
@@ -299,20 +298,17 @@ const useGame = (): UseGameResult => {
                          if (colorCode === 'Y') brush = 'yellow';
                          
                          if (type === 'cal' && rest.length >= 4) {
-                             // Arrow: orig(2 chars) dest(2 chars)
                              const orig = rest.substring(0, 2);
                              const dest = rest.substring(2, 4);
                              shapes.push({ orig, dest, brush });
                          } else if (type === 'csl' && rest.length >= 2) {
-                             // Circle: orig(2 chars)
                              const orig = rest.substring(0, 2);
                              shapes.push({ orig, brush });
                          }
                       });
                   }
                   
-                  // Remove shape commands from text for display
-                  text = text.replace(/\[%(cal|csl)\s+.*?\]/g, '').trim();
+                  text = text.replace(/\s*\[%(cal|csl)\s+.*?\]/g, '').trim();
                   
                   const node = newNodes[currentId];
                   if (node) {
@@ -338,7 +334,6 @@ const useGame = (): UseGameResult => {
               // Ignore
           } else if (san) {
               if (variationDepth === 0) {
-                  // Process move
                   try {
                        const sanMove = parseSan(currentChess, san) as NormalMove;
                        if (sanMove) {
@@ -384,7 +379,6 @@ const useGame = (): UseGameResult => {
   const exportPgn = useCallback(() => {
       let pgn = '';
       if (gameMetadata) {
-          // Use existing headers if available
           Object.entries(gameMetadata).forEach(([key, value]) => {
               if (key !== 'pgn' && key !== 'id') {
                  pgn += `[${key} "${value}"]\n`;
@@ -398,8 +392,6 @@ const useGame = (): UseGameResult => {
           pgn += '[White "White"]\n[Black "Black"]\n[Result "*"]\n\n';
       }
       
-      // Use historyPath to access annotations
-      // Skip root (index 0)
       const moves = historyPath.slice(1);
       
       let moveString = '';
@@ -413,12 +405,10 @@ const useGame = (): UseGameResult => {
               moveString += `${node.move?.san} `;
           }
           
-          // NAGs
           if (node.nags && node.nags.length > 0) {
               moveString += node.nags.map(n => `$${n}`).join(' ') + ' ';
           }
           
-          // Comments and Shapes
           const comments = node.comments || [];
           const shapes = node.shapes || [];
           
@@ -429,8 +419,7 @@ const useGame = (): UseGameResult => {
               const circles: string[] = [];
               
               shapes.forEach(shape => {
-                  // Map specific brush names
-                  let c = 'G'; // Default Green
+                  let c = 'G'; 
                   const b = shape.brush || 'green';
                   
                   if (b === 'red' || b === 'paleRed') c = 'R';
@@ -508,16 +497,12 @@ const useGame = (): UseGameResult => {
   }, [chess, move]);
 
   const playLine = useCallback((sanMoves: string[]) => {
-      // Clone chess state to validate moves without mutating current render state
       const tempChess = chess.clone();
       let startId = currentNodeId;
 
       setNodes(prev => {
           const nextNodes = { ...prev };
           let curr = startId;
-          // We need a local chess instance that updates as we traverse/create nodes
-          // But 'tempChess' captured outside is stale if we loop? 
-          // No, tempChess is mutable (Chess class).
           
           for (const san of sanMoves) {
               try {
@@ -547,7 +532,9 @@ const useGame = (): UseGameResult => {
                       move: { uci, san },
                       children: [],
                       parentId: curr,
-                      comments: []
+                      comments: [],
+                      nags: [],
+                      shapes: []
                   };
                   
                   nextNodes[curr] = { ...nextNodes[curr], children: [...nextNodes[curr].children, newNodeId] };
@@ -558,13 +545,6 @@ const useGame = (): UseGameResult => {
                   break;
               }
           }
-          
-          // Side effect: update current node
-          // We can't call setCurrentNodeId here directly in updater?
-          // Actually we can, but it might trigger re-render. 
-          // Better to use useEffect or just call it after setNodes? 
-          // But we don't know the final ID outside.
-          // Hack: we can schedule the update.
           setTimeout(() => setCurrentNodeId(curr), 0);
           
           return nextNodes;

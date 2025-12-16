@@ -10,7 +10,8 @@ import SaveToDatabaseModal from './components/SaveToDatabaseModal';
 import DatabaseExplorer from './components/DatabaseExplorer';
 import PrepExplorer from './components/PrepExplorer';
 import AnnotationTools from './components/AnnotationTools';
-import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft, PlusCircle, BookOpen, Users } from 'lucide-react';
+import DatabaseLibrary from './components/DatabaseLibrary';
+import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft, PlusCircle, BookOpen, Users, Globe } from 'lucide-react';
 import * as React from 'react';
 import { clsx } from 'clsx';
 import { parseUciInfo, type EngineInfo } from './utils/engine';
@@ -53,7 +54,7 @@ function App() {
   const [isDeepAnalysis, setIsDeepAnalysis] = React.useState(false);
   const [engineOutput, setEngineOutput] = React.useState<string[]>([]); // Keep raw output for debug if needed
 
-  const [currentView, setCurrentView] = React.useState<'board' | 'lichess' | 'engineManager' | 'databases' | 'databaseDetail'>('board');
+  const [currentView, setCurrentView] = React.useState<'board' | 'lichess' | 'engineManager' | 'databases' | 'databaseDetail' | 'databaseLibrary'>('board');
   const [analysisTab, setAnalysisTab] = React.useState<'notation' | 'explorer' | 'prep'>('notation');
   const [enginePath, setEnginePath] = React.useState<string | null>(null);
   const [engineDisplayName, setEngineDisplayName] = React.useState<string>('');
@@ -302,6 +303,12 @@ function App() {
                     onClick={() => setCurrentView('databases')}
                   />
                   <SidebarItem 
+                    icon={Globe} 
+                    label="Cloud Library" 
+                    active={currentView === 'databaseLibrary'} 
+                    onClick={() => setCurrentView('databaseLibrary')}
+                  />
+                  <SidebarItem 
                     icon={Users} 
                     label="Opening Prep" 
                     active={currentView === 'board' && analysisTab === 'prep'}
@@ -383,6 +390,8 @@ function App() {
                     setCurrentView('board');
                 }}
              />
+          ) : currentView === 'databaseLibrary' ? (
+             <DatabaseLibrary />
           ) : (
             <div className="flex flex-col h-full bg-background relative">
              <div className="absolute top-0 left-0 w-full h-16 bg-gradient-to-b from-background to-transparent z-0 pointer-events-none" />

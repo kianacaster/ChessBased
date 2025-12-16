@@ -81,6 +81,24 @@ export interface IElectronAPI {
   dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => Promise<PrepScenario[]>;
   dbGetPrepScenarios: (dbIdsA: string[], dbIdsB: string[], moves: string[], limit: number) => Promise<PrepScenario[]>;
   extractPgnHeaders: (pgnContent: string) => Promise<GameHeader | null>;
+  
+  // Public Databases
+  getPublicDatabases: () => Promise<PublicDatabaseMetadata[]>;
+  downloadPublicDatabase: (dbId: string) => Promise<boolean>;
+  onPublicDbDownloadProgress: (callback: (data: { dbId: string, progress: number }) => void) => void;
+  onPublicDbDownloadStatus: (callback: (data: { dbId: string, status: string }) => void) => void;
+  onPublicDbDownloadError: (callback: (data: { dbId: string, error: string }) => void) => void;
+}
+
+export interface PublicDatabaseMetadata {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  size: string;
+  source: string;
+  credit: string;
+  category: 'players' | 'masters' | 'engines';
 }
 
 export interface ExplorerMoveStats {

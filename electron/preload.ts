@@ -49,4 +49,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => ipcRenderer.invoke('db-compare', dbIdsA, dbIdsB, moves),
   dbGetPrepScenarios: (dbIdsA: string[], dbIdsB: string[], rootMoves: string[], depth: number) => ipcRenderer.invoke('db-get-prep-scenarios', dbIdsA, dbIdsB, rootMoves, depth),
   extractPgnHeaders: (pgnContent: string) => ipcRenderer.invoke('db-extract-pgn-headers', pgnContent),
+
+  // Public Databases
+  getPublicDatabases: () => ipcRenderer.invoke('get-public-databases'),
+  downloadPublicDatabase: (dbId: string) => ipcRenderer.invoke('download-public-database', dbId),
+  onPublicDbDownloadProgress: (callback: (data: { dbId: string, progress: number }) => void) => {
+      ipcRenderer.on('public-db-download-progress', (event, data) => callback(data));
+  },
+  onPublicDbDownloadStatus: (callback: (data: { dbId: string, status: string }) => void) => {
+      ipcRenderer.on('public-db-download-status', (event, data) => callback(data));
+  },
+  onPublicDbDownloadError: (callback: (data: { dbId: string, error: string }) => void) => {
+      ipcRenderer.on('public-db-download-error', (event, data) => callback(data));
+  },
 });
