@@ -252,6 +252,96 @@ export class DatabaseManager {
     await this.saveDatabases();
   }
 
+  public async renameDatabase(id: string, newName: string): Promise<void> {
+      await this.initPromise;
+      const db = this.databases.find(d => d.id === id);
+      if (!db) throw new Error('Database not found');
+      
+      db.name = newName;
+      await this.saveDatabases();
+  }
+
+  public async mergeDatabases(sourceIds: string[], newName: string): Promise<DatabaseEntry> {
+      await this.initPromise;
+      
+      // 1. Create new database
+      const newDb = await this.createDatabase(newName);
+      
+      try {
+          // 2. Read contents of all source databases
+          let combinedContent = '';
+          
+          for (const id of sourceIds) {
+              const sourceDb = this.databases.find(d => d.id === id);
+              if (!sourceDb) continue;
+              
+              try {
+                  const content = await fs.readFile(sourceDb.path, 'utf-8');
+                  // Ensure separation
+                  combinedContent += content + '\n\n';
+              } catch (e) {
+                  console.warn(`Failed to read source DB ${sourceDb.name} for merge`, e);
+              }
+          }
+          
+          // 3. Write combined content to new DB file
+          // Note: createDatabase creates an empty file. We overwrite it.
+          await fs.writeFile(newDb.path, combinedContent);
+          
+          // 4. Update stats
+          const stats = await fs.stat(newDb.path);
+          newDb.lastModified = stats.mtimeMs;
+          
+          // Recalculate game count
+          this.gameDatabase.clearGames();
+          const headers = await this.gameDatabase.extractHeadersFromPgn(combinedContent);
+          newDb.gameCount = headers.length;
+          
+          await this.saveDatabases();
+          
+          return newDb;
+      } catch (error) {
+          throw new Error(`Failed to merge databases: ${error}`);
+      }
+  }
+
+  public async removeGames(id: string, gameIndices: number[]): Promise<void> {
+      await this.initPromise;
+      const db = this.databases.find(d => d.id === id);
+      if (!db) throw new Error('Database not found');
+      
+      try {
+          // 1. Load all games
+          const content = await fs.readFile(db.path, 'utf-8');
+          this.gameDatabase.clearGames();
+          const headers = await this.gameDatabase.extractHeadersFromPgn(content);
+          
+          // 2. Filter out specific indices
+          // Create a Set for O(1) lookup
+          const indicesToRemove = new Set(gameIndices);
+          const remainingGames = headers.filter((_, index) => !indicesToRemove.has(index));
+          
+          if (remainingGames.length === headers.length) {
+              return; // Nothing to remove
+          }
+          
+          // 3. Reconstruct PGN
+          const newContent = remainingGames.map(g => g.pgn).join('\n\n');
+          
+          // 4. Write back
+          await fs.writeFile(db.path, newContent);
+          
+          // 5. Update stats
+          const stats = await fs.stat(db.path);
+          db.lastModified = stats.mtimeMs;
+          db.gameCount = remainingGames.length;
+          await this.saveDatabases();
+          
+      } catch (error) {
+          throw new Error(`Failed to remove games: ${error}`);
+      }
+  }
+
   public async searchGames(dbIds: string[], moves: string[]): Promise<any> { // return ExplorerResult type if imported, using any to avoid import cycles for now or just inline structure
       await this.initPromise;
       

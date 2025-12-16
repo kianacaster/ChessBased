@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { DatabaseEntry } from '../types/app';
-import { Database, Plus, FolderOpen, FileText, Calendar, Trash2 } from 'lucide-react';
+import { Database, Plus, FolderOpen, FileText, Calendar, Trash2, Edit2, Merge, CheckSquare, Square } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface DatabaseListProps {
@@ -12,6 +12,14 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [newDbName, setNewDbName] = useState('');
+  
+  // Selection & Management State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [isMerging, setIsMerging] = useState(false);
+  const [mergeName, setMergeName] = useState('');
 
   const loadDatabases = async () => {
     try {
@@ -29,7 +37,6 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
   useEffect(() => {
     loadDatabases();
     
-    // Listen for new downloads completion to refresh list
     if (window.electronAPI) {
         const removeListener = window.electronAPI.onLichessDownloadComplete((db) => {
             setDatabases(prev => {
@@ -37,9 +44,6 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
                 return [...prev, db];
             });
         });
-        // cleanup? The listener returns void currently in preload... 
-        // We might need to implement removeListener in preload if we want to be strict,
-        // but for this app structure it might be fine.
     }
   }, []);
 
@@ -60,7 +64,6 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
       const newDb = await window.electronAPI.dbImport();
       if (newDb) {
         setDatabases(prev => {
-            // Avoid duplicates
             if (prev.find(d => d.id === newDb.id)) return prev;
             return [...prev, newDb];
         });
@@ -76,9 +79,55 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
           try {
               await window.electronAPI.dbDelete(id);
               setDatabases(prev => prev.filter(db => db.id !== id));
+              if (selectedIds.has(id)) {
+                  const next = new Set(selectedIds);
+                  next.delete(id);
+                  setSelectedIds(next);
+              }
           } catch (err) {
               console.error("Failed to delete database", err);
           }
+      }
+  };
+
+  const handleRenameStart = (db: DatabaseEntry, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setRenamingId(db.id);
+      setRenameValue(db.name);
+  };
+
+  const handleRenameSubmit = async () => {
+      if (!renamingId || !renameValue.trim()) {
+          setRenamingId(null);
+          return;
+      }
+      try {
+          await window.electronAPI.dbRename(renamingId, renameValue.trim());
+          setDatabases(prev => prev.map(db => db.id === renamingId ? { ...db, name: renameValue.trim() } : db));
+          setRenamingId(null);
+      } catch (err) {
+          console.error("Failed to rename database", err);
+      }
+  };
+
+  const toggleSelection = (id: string) => {
+      const next = new Set(selectedIds);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setSelectedIds(next);
+  };
+
+  const handleMerge = async () => {
+      if (!mergeName.trim() || selectedIds.size < 2) return;
+      try {
+          const newDb = await window.electronAPI.dbMerge(Array.from(selectedIds), mergeName);
+          setDatabases(prev => [...prev, newDb]);
+          setIsMerging(false);
+          setMergeName('');
+          setSelectedIds(new Set());
+          setIsSelectionMode(false);
+      } catch (err) {
+          console.error("Merge failed", err);
       }
   };
 
@@ -96,20 +145,51 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
             <h2 className="text-2xl font-bold tracking-tight">Databases</h2>
         </div>
         <div className="flex space-x-2">
-            <button 
-                onClick={handleImport}
-                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-muted-foreground bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
-            >
-                <FolderOpen size={16} />
-                <span>Import PGN</span>
-            </button>
-            <button 
-                onClick={() => setIsCreating(true)}
-                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
-            >
-                <Plus size={16} />
-                <span>New Database</span>
-            </button>
+            {isSelectionMode ? (
+                <>
+                    <button 
+                        onClick={() => setIsMerging(true)}
+                        disabled={selectedIds.size < 2}
+                        className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
+                    >
+                        <Merge size={16} />
+                        <span>Merge Selected ({selectedIds.size})</span>
+                    </button>
+                    <button 
+                        onClick={() => { setIsSelectionMode(false); setSelectedIds(new Set()); }}
+                        className="px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted rounded-md transition-colors"
+                    >
+                        Cancel
+                    </button>
+                </>
+            ) : (
+                <button 
+                    onClick={() => setIsSelectionMode(true)}
+                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-muted-foreground bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
+                >
+                    <CheckSquare size={16} />
+                    <span>Select / Merge</span>
+                </button>
+            )}
+            
+            {!isSelectionMode && (
+                <>
+                    <button 
+                        onClick={handleImport}
+                        className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-muted-foreground bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
+                    >
+                        <FolderOpen size={16} />
+                        <span>Import</span>
+                    </button>
+                    <button 
+                        onClick={() => setIsCreating(true)}
+                        className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
+                    >
+                        <Plus size={16} />
+                        <span>New</span>
+                    </button>
+                </>
+            )}
         </div>
       </div>
 
@@ -125,33 +205,78 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
                     className="flex-1 bg-input border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                     autoFocus
                 />
-                <button 
-                    onClick={handleCreate}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium"
-                >
-                    Create
-                </button>
-                <button 
-                    onClick={() => setIsCreating(false)}
-                    className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md text-sm font-medium"
-                >
-                    Cancel
-                </button>
+                <button onClick={handleCreate} className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium">Create</button>
+                <button onClick={() => setIsCreating(false)} className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md text-sm font-medium">Cancel</button>
+            </div>
+        </div>
+      )}
+
+      {isMerging && (
+        <div className="mb-6 p-4 bg-card border border-border rounded-lg animate-in fade-in slide-in-from-top-2">
+            <h3 className="text-sm font-medium mb-2">Merge Selected Databases</h3>
+            <p className="text-xs text-muted-foreground mb-3">Creating a new database from {selectedIds.size} sources.</p>
+            <div className="flex space-x-2">
+                <input 
+                    type="text" 
+                    value={mergeName}
+                    onChange={(e) => setMergeName(e.target.value)}
+                    placeholder="New Merged Database Name"
+                    className="flex-1 bg-input border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    autoFocus
+                />
+                <button onClick={handleMerge} className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium">Merge</button>
+                <button onClick={() => setIsMerging(false)} className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md text-sm font-medium">Cancel</button>
             </div>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {databases.map(db => (
-            <button 
+            <div 
                 key={db.id}
-                onClick={() => onSelectDatabase(db)}
-                className="flex flex-col text-left p-4 bg-card border border-border rounded-lg hover:border-primary/50 hover:shadow-md transition-all group relative"
+                onClick={(e) => {
+                    if (isSelectionMode || e.ctrlKey || e.metaKey) {
+                        if (!isSelectionMode) {
+                             setIsSelectionMode(true);
+                             // If starting selection with ctrl/meta, we just select this one.
+                             // Existing selectedIds are likely empty if mode was false.
+                             const next = new Set<string>();
+                             next.add(db.id);
+                             setSelectedIds(next);
+                        } else {
+                             toggleSelection(db.id);
+                        }
+                    }
+                    else onSelectDatabase(db);
+                }}
+                className={clsx(
+                    "flex flex-col text-left p-4 bg-card border rounded-lg transition-all group relative cursor-pointer",
+                    isSelectionMode && selectedIds.has(db.id) ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary/50 hover:shadow-md"
+                )}
             >
                 <div className="flex items-center space-x-3 mb-3">
-                    <FileText className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                    <span className="font-semibold text-lg truncate w-full pr-8">{db.name}</span>
+                    {isSelectionMode && (
+                        <div className={clsx("text-primary", selectedIds.has(db.id) ? "opacity-100" : "opacity-50")}>
+                            {selectedIds.has(db.id) ? <CheckSquare size={20} /> : <Square size={20} />}
+                        </div>
+                    )}
+                    <FileText className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                    
+                    {renamingId === db.id ? (
+                        <input 
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            onBlur={handleRenameSubmit}
+                            onKeyDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
+                            className="flex-1 bg-input border border-border rounded px-1 text-lg font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                            autoFocus
+                        />
+                    ) : (
+                        <span className="font-semibold text-lg truncate w-full pr-16">{db.name}</span>
+                    )}
                 </div>
+                
                 <div className="text-sm text-muted-foreground space-y-1">
                     <div className="flex items-center justify-between">
                         <span>Games</span>
@@ -167,18 +292,26 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
                         </span>
                     </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground truncate w-full opacity-70">
-                    {db.path}
-                </div>
                 
-                <div 
-                    onClick={(e) => handleDelete(db.id, e)}
-                    className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-                    title="Delete Database"
-                >
-                    <Trash2 size={16} />
-                </div>
-            </button>
+                {!isSelectionMode && renamingId !== db.id && (
+                    <div className="absolute top-4 right-4 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                            onClick={(e) => handleRenameStart(db, e)}
+                            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                            title="Rename"
+                        >
+                            <Edit2 size={16} />
+                        </button>
+                        <button 
+                            onClick={(e) => handleDelete(db.id, e)}
+                            className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                            title="Delete"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
+                )}
+            </div>
         ))}
         {databases.length === 0 && !isCreating && (
             <div className="col-span-full flex flex-col items-center justify-center p-12 text-muted-foreground border-2 border-dashed border-border rounded-lg">

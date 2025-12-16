@@ -77,6 +77,9 @@ export interface IElectronAPI {
   dbLoadGames: (id: string) => Promise<GameHeader[]>;
   dbAddGame: (id: string, pgn: string) => Promise<void>;
   dbDelete: (id: string) => Promise<void>;
+  dbRename: (id: string, newName: string) => Promise<void>;
+  dbMerge: (sourceIds: string[], newName: string) => Promise<DatabaseEntry>;
+  dbRemoveGames: (id: string, gameIndices: number[]) => Promise<void>;
   dbSearch: (dbIds: string[], moves: string[]) => Promise<ExplorerResult>;
   dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => Promise<PrepScenario[]>;
   dbGetPrepScenarios: (dbIdsA: string[], dbIdsB: string[], moves: string[], limit: number) => Promise<PrepScenario[]>;

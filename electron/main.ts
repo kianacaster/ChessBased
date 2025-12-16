@@ -161,6 +161,18 @@ ipcMain.handle('db-delete', async (event, id: string) => {
     return databaseManager.deleteDatabase(id);
 });
 
+ipcMain.handle('db-rename', async (event, id: string, newName: string) => {
+    return databaseManager.renameDatabase(id, newName);
+});
+
+ipcMain.handle('db-merge', async (event, sourceIds: string[], newName: string) => {
+    return databaseManager.mergeDatabases(sourceIds, newName);
+});
+
+ipcMain.handle('db-remove-games', async (event, id: string, gameIndices: number[]) => {
+    return databaseManager.removeGames(id, gameIndices);
+});
+
 ipcMain.handle('db-search', async (event, dbIds: string[], moves: string[]) => {
     return databaseManager.searchGames(dbIds, moves);
 });
