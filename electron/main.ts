@@ -9,6 +9,8 @@ import { EngineDownloader } from './engines/EngineDownloader'; // Import EngineD
 import { AVAILABLE_ENGINES } from './engines/engine-metadata';
 import type { EngineMetadata } from './engines/engine-types';
 import { DatabaseManager } from './db/DatabaseManager';
+import { DatabaseDownloader } from './db/DatabaseDownloader';
+import { PUBLIC_DATABASES } from './db/public-databases';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -21,6 +23,7 @@ let gameDatabase: GameDatabase;
 let lichessService: LichessService;
 let engineDownloader: EngineDownloader; // Declare engineDownloader
 let databaseManager: DatabaseManager;
+let databaseDownloader: DatabaseDownloader;
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -60,6 +63,27 @@ app.on('ready', () => {
   lichessService = new LichessService();
   engineDownloader = EngineDownloader.getInstance(); // Initialize EngineDownloader
   databaseManager = new DatabaseManager();
+  databaseDownloader = DatabaseDownloader.getInstance(databaseManager);
+});
+
+ipcMain.handle('get-public-databases', () => {
+    return PUBLIC_DATABASES;
+});
+
+ipcMain.handle('download-public-database', async (event, dbId: string) => {
+    if (!mainWindow) return;
+    try {
+        await databaseDownloader.downloadDatabase(
+            dbId,
+            (progress) => mainWindow?.webContents.send('public-db-download-progress', { dbId, progress }),
+            (status) => mainWindow?.webContents.send('public-db-download-status', { dbId, status })
+        );
+        return true;
+    } catch (e) {
+        console.error("Public DB Download Error", e);
+        mainWindow.webContents.send('public-db-download-error', { dbId, error: e instanceof Error ? e.message : String(e) });
+        return false;
+    }
 });
 
 ipcMain.handle('fetch-lichess-games', async (event, username: string, filters: LichessGameFilter) => {

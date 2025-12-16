@@ -64,10 +64,7 @@ export interface IElectronAPI {
   onEngineDownloadProgress: (callback: (data: { engineId: string, progress: number }) => void) => void;
   onEngineDownloadStatus: (callback: (data: { engineId: string, status: string }) => void) => void;
   onEngineDownloadError: (callback: (data: { engineId: string, error: string }) => void) => void;
-<<<<<<< HEAD
-=======
   getInstalledEngines: () => Promise<{ name: string; path: string }[]>;
->>>>>>> bug/engine-manager-fix
 
   // Database & Persistent Lichess
   lichessDownloadBackground: (username: string, filters: LichessGameFilter) => Promise<DatabaseEntry>;
@@ -82,7 +79,26 @@ export interface IElectronAPI {
   dbDelete: (id: string) => Promise<void>;
   dbSearch: (dbIds: string[], moves: string[]) => Promise<ExplorerResult>;
   dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => Promise<PrepScenario[]>;
+  dbGetPrepScenarios: (dbIdsA: string[], dbIdsB: string[], moves: string[], limit: number) => Promise<PrepScenario[]>;
   extractPgnHeaders: (pgnContent: string) => Promise<GameHeader | null>;
+  
+  // Public Databases
+  getPublicDatabases: () => Promise<PublicDatabaseMetadata[]>;
+  downloadPublicDatabase: (dbId: string) => Promise<boolean>;
+  onPublicDbDownloadProgress: (callback: (data: { dbId: string, progress: number }) => void) => void;
+  onPublicDbDownloadStatus: (callback: (data: { dbId: string, status: string }) => void) => void;
+  onPublicDbDownloadError: (callback: (data: { dbId: string, error: string }) => void) => void;
+}
+
+export interface PublicDatabaseMetadata {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  size: string;
+  source: string;
+  credit: string;
+  category: 'players' | 'masters' | 'engines';
 }
 
 export interface ExplorerMoveStats {

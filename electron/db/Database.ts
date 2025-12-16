@@ -74,7 +74,10 @@ export class GameDatabase {
     // Push last game
     pushGame();
 
-    this.games.push(...headers); 
+    // Use concatenation or loop to avoid "Maximum call stack size exceeded" with spread operator on large arrays
+    // this.games.push(...headers) fails for >~100k items
+    this.games = this.games.concat(headers);
+    
     return headers;
   }
 

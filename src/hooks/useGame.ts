@@ -5,8 +5,8 @@ import { chessgroundDests as toDests } from 'chessops/compat';
 import { makeFen, parseFen } from 'chessops/fen';
 import { makeSan, parseSan } from 'chessops/san';
 import type { NormalMove } from 'chessops/types';
-import type { TreeNode } from '../types/chess';
-import type { GameHeader } from '../types/app'; // Added GameHeader import
+import type { TreeNode, DrawShape } from '../types/chess';
+import type { GameHeader } from '../types/app';
 
 export interface MoveData {
   uci: string;
@@ -27,7 +27,20 @@ interface UseGameResult {
   currentNode: TreeNode;
   goToNode: (id: string) => void;
   lastMove?: [string, string];
-  gameMetadata: GameHeader | null; // Added gameMetadata to interface
+  gameMetadata: GameHeader | null;
+  
+  exportPgn: () => string;
+  goBack: () => void;
+  goForward: () => void;
+  goToStart: () => void;
+  goToEnd: () => void;
+  playSan: (san: string) => boolean;
+  playLine: (sanMoves: string[]) => void;
+
+  // Annotation API
+  setNodeComment: (id: string, comment: string) => void;
+  setNodeNags: (id: string, nags: number[]) => void;
+  setNodeShapes: (id: string, shapes: DrawShape[]) => void;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 10);
@@ -43,7 +56,9 @@ const useGame = (): UseGameResult => {
         fen: initialFen,
         children: [],
         parentId: null,
-        comments: []
+        comments: [],
+        nags: [],
+        shapes: []
       }
     };
   });
@@ -51,7 +66,37 @@ const useGame = (): UseGameResult => {
   // Initialize rootId and currentNodeId based on the initial nodes
   const [rootId, setRootId] = useState(() => Object.keys(nodes)[0]);
   const [currentNodeId, setCurrentNodeId] = useState(() => Object.keys(nodes)[0]);
-  const [gameMetadata, setGameMetadata] = useState<GameHeader | null>(null); // Added gameMetadata state
+  const [gameMetadata, setGameMetadata] = useState<GameHeader | null>(null); 
+
+  const setNodeComment = useCallback((id: string, comment: string) => {
+    setNodes(prev => {
+        if (!prev[id]) return prev;
+        return {
+            ...prev,
+            [id]: { ...prev[id], comments: [comment] }
+        };
+    });
+  }, []);
+
+  const setNodeNags = useCallback((id: string, nags: number[]) => {
+      setNodes(prev => {
+        if (!prev[id]) return prev;
+        return {
+            ...prev,
+            [id]: { ...prev[id], nags }
+        };
+      });
+  }, []);
+
+  const setNodeShapes = useCallback((id: string, shapes: DrawShape[]) => {
+      setNodes(prev => {
+        if (!prev[id]) return prev;
+        return {
+            ...prev,
+            [id]: { ...prev[id], shapes }
+        };
+      });
+  }, []);
 
   useEffect(() => {
     // console.log('Current Node ID:', currentNodeId);
@@ -146,7 +191,9 @@ const useGame = (): UseGameResult => {
       move: { uci: uciString, san },
       children: [],
       parentId: currentNodeId,
-      comments: []
+      comments: [],
+      nags: [],
+      shapes: []
     };
 
     setNodes(prev => {
@@ -191,19 +238,21 @@ const useGame = (): UseGameResult => {
   }, [currentNode]);
 
   const loadPgn = useCallback((pgn: string) => {
-      // Very basic PGN parser for main line
-      // 1. Remove headers (anything in [])
-      const body = pgn.replace(/\[.*?\]/gs, '');
-      // 2. Remove comments (anything in {})
-      const noComments = body.replace(/\{.*?\}/gs, '');
-      // 3. Remove variations (anything in ()) - recursive needed but for now simple
-      const noVariations = noComments.replace(/\(.*?\)/gs, '');
-      // 4. Remove move numbers (1. or 1...)
-      const clean = noVariations.replace(/\d+\.+/g, ' ');
+      // Extract headers
+      const headerRegex = /\s*\[(\w+)\s+"(.*?)"\]/g;
+      let match;
+      const headers: any = {};
+      while ((match = headerRegex.exec(pgn)) !== null) {
+          headers[match[1]] = match[2];
+      }
+      setGameMetadata(headers as GameHeader);
       
-      const tokens = clean.split(/\s+/).filter(t => t && t !== '*' && t !== '1-0' && t !== '0-1' && t !== '1/2-1/2');
+      // Remove headers for body parsing
+      const body = pgn.replace(/\s*\[.*?\]/gs, '');
       
-      // Reset game
+      // Tokenize body
+      const regex = /\{([\s\S]*?)\}|(\$d+)|\(|\)|(\d+\.)|([a-zA-Z0-9+=#\-]+)|(\*|1-0|0-1|1\/2-1\/2)/g;
+      
       const newRootId = generateId();
       const newNodes: Record<string, TreeNode> = {
           [newRootId]: {
@@ -211,96 +260,196 @@ const useGame = (): UseGameResult => {
               fen: initialFen,
               children: [],
               parentId: null,
-              comments: []
+              comments: [],
+              nags: [],
+              shapes: []
           }
       };
       
       let currentId = newRootId;
       let currentChess = Chess.default();
+      let variationDepth = 0; 
       
-      for (const token of tokens) {
-          try {
-              const sanMove = parseSan(currentChess, token);
-              if (!sanMove) continue;
-              
-              const uciMove = makeSan(currentChess, sanMove); // This gives SAN back, wait.
-              // We need UCI. 
-              // chessops Move object doesn't have UCI property directly?
-              // We can construct it.
-              const from = sanMove.from;
-              const to = sanMove.to;
-              const promotion = sanMove.promotion;
-              // chessops squares are integers 0-63. We need to convert to algebraic.
-              // Actually `parseUci` goes string -> Move.
-              // We have Move. We need to apply it.
-              
-              // We need to store UCI string in node.
-              // Helper to convert square int to string?
-              // chessops/util has `makeUci`.
-              // But `makeUci` takes a Move.
-              
-              // Let's rely on playing it on `currentChess` and getting the resulting FEN.
-              // But we also need the move string (UCI) for the UI.
-              
-              // Let's implement a simple `toUci(move)`
-               const file = (s: number) => 'abcdefgh'[s & 7];
-               const rank = (s: number) => '12345678'[s >> 3];
-               const square = (s: number) => file(s) + rank(s);
-               
-               let uci = square(from) + square(to);
-               if (promotion) {
-                   uci += promotion;
+      let token;
+      while ((token = regex.exec(body)) !== null) {
+          const [full, comment, nag, moveNum, san, result] = token;
+          
+          if (comment) {
+              if (variationDepth === 0) {
+                  let text = comment.trim();
+                  const shapes: DrawShape[] = [];
+                  
+                  const shapeRegex = /\s*\[%(cal|csl)\s+(.*?)\]/g;
+                  let shapeMatch;
+                  while ((shapeMatch = shapeRegex.exec(text)) !== null) {
+                      const type = shapeMatch[1];
+                      const data = shapeMatch[2].split(',');
+                      data.forEach(d => {
+                         d = d.trim();
+                         if (!d) return;
+                         const colorCode = d.charAt(0);
+                         const rest = d.substring(1);
+                         
+                         let brush = 'green';
+                         if (colorCode === 'R') brush = 'red';
+                         if (colorCode === 'B') brush = 'blue';
+                         if (colorCode === 'Y') brush = 'yellow';
+                         
+                         if (type === 'cal' && rest.length >= 4) {
+                             const orig = rest.substring(0, 2);
+                             const dest = rest.substring(2, 4);
+                             shapes.push({ orig, dest, brush });
+                         } else if (type === 'csl' && rest.length >= 2) {
+                             const orig = rest.substring(0, 2);
+                             shapes.push({ orig, brush });
+                         }
+                      });
+                  }
+                  
+                  text = text.replace(/\s*\[%(cal|csl)\s+.*?\]/g, '').trim();
+                  
+                  const node = newNodes[currentId];
+                  if (node) {
+                      if (text) node.comments.push(text);
+                      if (shapes.length > 0) node.shapes = [...(node.shapes || []), ...shapes];
+                  }
+              }
+          } else if (nag) {
+               if (variationDepth === 0) {
+                   const nagCode = parseInt(nag.substring(1));
+                   const node = newNodes[currentId];
+                   if (node) {
+                       node.nags = [...(node.nags || []), nagCode];
+                   }
                }
-
-              currentChess.play(sanMove);
-              const newFen = makeFen(currentChess.toSetup());
-              const newNodeId = generateId();
-              
-              const newNode: TreeNode = {
-                  id: newNodeId,
-                  fen: newFen,
-                  move: { uci, san: token },
-                  children: [],
-                  parentId: currentId,
-                  comments: []
-              };
-              
-              newNodes[currentId].children.push(newNodeId);
-              newNodes[newNodeId] = newNode;
-              currentId = newNodeId;
-              
-          } catch (e) {
-              console.warn('Failed to parse move:', token);
-              break;
+          } else if (full === '(') {
+              variationDepth++;
+          } else if (full === ')') {
+              if (variationDepth > 0) variationDepth--;
+          } else if (moveNum) {
+              // Ignore
+          } else if (result) {
+              // Ignore
+          } else if (san) {
+              if (variationDepth === 0) {
+                  try {
+                       const sanMove = parseSan(currentChess, san) as NormalMove;
+                       if (sanMove) {
+                           const file = (s: number) => 'abcdefgh'[s & 7];
+                           const rank = (s: number) => '12345678'[s >> 3];
+                           const from = file(sanMove.from) + rank(sanMove.from);
+                           const to = file(sanMove.to) + rank(sanMove.to);
+                           const prom = sanMove.promotion || '';
+                           const uci = from + to + prom;
+                           
+                           currentChess.play(sanMove);
+                           const newFen = makeFen(currentChess.toSetup());
+                           const newNodeId = generateId();
+                           
+                           const newNode: TreeNode = {
+                               id: newNodeId,
+                               fen: newFen,
+                               move: { uci, san },
+                               children: [],
+                               parentId: currentId,
+                               comments: [],
+                               nags: [],
+                               shapes: []
+                           };
+                           
+                           newNodes[currentId].children.push(newNodeId);
+                           newNodes[newNodeId] = newNode;
+                           currentId = newNodeId;
+                       }
+                  } catch (e) {
+                      console.warn('Move parse error', san);
+                  }
+              }
           }
       }
       
       setNodes(newNodes);
       setRootId(newRootId);
-      setCurrentNodeId(newRootId); // Start at beginning of game? Or end? Usually end.
-      // Let's go to the end
       setCurrentNodeId(currentId);
       
   }, []);
 
   const exportPgn = useCallback(() => {
-      let pgn = '[Event "Casual Game"]\n[Site "ChessBased Clone"]\n[Date "' + new Date().toISOString().split('T')[0].replace(/-/g, '.') + '"]\n';
-      pgn += '[White "White"]\n[Black "Black"]\n[Result "*"]\n\n';
+      let pgn = '';
+      if (gameMetadata) {
+          Object.entries(gameMetadata).forEach(([key, value]) => {
+              if (key !== 'pgn' && key !== 'id') {
+                 pgn += `[${key} "${value}"]\n`;
+              }
+          });
+          if (!gameMetadata.Date) {
+               pgn += '[Date "' + new Date().toISOString().split('T')[0].replace(/-/g, '.') + '"]\n';
+          }
+      } else {
+          pgn = '[Event "Casual Game"]\n[Site "ChessBased Clone"]\n[Date "' + new Date().toISOString().split('T')[0].replace(/-/g, '.') + '"]\n';
+          pgn += '[White "White"]\n[Black "Black"]\n[Result "*"]\n\n';
+      }
       
-      // Reconstruct moves from history
-      // Note: history contains {uci, san}
+      const moves = historyPath.slice(1);
       
       let moveString = '';
-      history.forEach((move, i) => {
-          if (i % 2 === 0) {
-              moveString += `${(i / 2) + 1}. ${move.san} `;
+      moves.forEach((node, i) => {
+          const moveNumber = Math.floor(i / 2) + 1;
+          const isWhite = i % 2 === 0;
+          
+          if (isWhite) {
+              moveString += `${moveNumber}. ${node.move?.san} `;
           } else {
-              moveString += `${move.san} `;
+              moveString += `${node.move?.san} `;
+          }
+          
+          if (node.nags && node.nags.length > 0) {
+              moveString += node.nags.map(n => `$${n}`).join(' ') + ' ';
+          }
+          
+          const comments = node.comments || [];
+          const shapes = node.shapes || [];
+          
+          let commentString = comments.join(' ').trim();
+          
+          if (shapes.length > 0) {
+              const arrows: string[] = [];
+              const circles: string[] = [];
+              
+              shapes.forEach(shape => {
+                  let c = 'G'; 
+                  const b = shape.brush || 'green';
+                  
+                  if (b === 'red' || b === 'paleRed') c = 'R';
+                  else if (b === 'blue' || b === 'paleBlue') c = 'B';
+                  else if (b === 'yellow') c = 'Y';
+                  else if (b === 'green' || b === 'paleGreen') c = 'G';
+                  
+                  if (shape.dest) {
+                      arrows.push(`${c}${shape.orig}${shape.dest}`);
+                  } else {
+                      circles.push(`${c}${shape.orig}`);
+                  }
+              });
+              
+              let shapeCmds = '';
+              if (arrows.length > 0) shapeCmds += `[%cal ${arrows.join(',')}]`;
+              if (circles.length > 0) shapeCmds += ` ${circles.length > 0 && arrows.length > 0 ? '' : ''}[%csl ${circles.join(',')}]`;
+              
+              if (commentString) {
+                  commentString += ' ' + shapeCmds.trim();
+              } else {
+                  commentString = shapeCmds.trim();
+              }
+          }
+          
+          if (commentString) {
+              moveString += `{ ${commentString} } `;
           }
       });
       
       return pgn + moveString.trim() + ' *';
-  }, [history]);
+  }, [historyPath, gameMetadata]);
 
   const goBack = useCallback(() => {
       if (currentNode.parentId) {
@@ -329,7 +478,7 @@ const useGame = (): UseGameResult => {
 
   const playSan = useCallback((san: string) => {
       try {
-          const moveObj = parseSan(chess, san);
+          const moveObj = parseSan(chess, san) as NormalMove;
           if (!moveObj) return false;
           
           const file = (s: number) => 'abcdefgh'[s & 7];
@@ -346,20 +495,16 @@ const useGame = (): UseGameResult => {
   }, [chess, move]);
 
   const playLine = useCallback((sanMoves: string[]) => {
-      // Clone chess state to validate moves without mutating current render state
       const tempChess = chess.clone();
       let startId = currentNodeId;
 
       setNodes(prev => {
           const nextNodes = { ...prev };
           let curr = startId;
-          // We need a local chess instance that updates as we traverse/create nodes
-          // But 'tempChess' captured outside is stale if we loop? 
-          // No, tempChess is mutable (Chess class).
           
           for (const san of sanMoves) {
               try {
-                  const moveObj = parseSan(tempChess, san);
+                  const moveObj = parseSan(tempChess, san) as NormalMove;
                   if (!moveObj) break;
                   
                   const file = (s: number) => 'abcdefgh'[s & 7];
@@ -385,7 +530,9 @@ const useGame = (): UseGameResult => {
                       move: { uci, san },
                       children: [],
                       parentId: curr,
-                      comments: []
+                      comments: [],
+                      nags: [],
+                      shapes: []
                   };
                   
                   nextNodes[curr] = { ...nextNodes[curr], children: [...nextNodes[curr].children, newNodeId] };
@@ -396,13 +543,6 @@ const useGame = (): UseGameResult => {
                   break;
               }
           }
-          
-          // Side effect: update current node
-          // We can't call setCurrentNodeId here directly in updater?
-          // Actually we can, but it might trigger re-render. 
-          // Better to use useEffect or just call it after setNodes? 
-          // But we don't know the final ID outside.
-          // Hack: we can schedule the update.
           setTimeout(() => setCurrentNodeId(curr), 0);
           
           return nextNodes;
@@ -428,7 +568,11 @@ const useGame = (): UseGameResult => {
     goToStart,
     goToEnd,
     playSan,
-    playLine
+    playLine,
+    gameMetadata,
+    setNodeComment,
+    setNodeNags,
+    setNodeShapes
   };
 };
 
