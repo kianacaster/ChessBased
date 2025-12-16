@@ -4,11 +4,28 @@ A modern, free, open-source chess database and analysis application built with E
 
 ## Features
 
-*   **Game Database:** Store and manage your chess games.
-*   **Lichess Import:** Easily import your games from Lichess.
-*   **Tree Navigation:** Infinite variation support with a structured "folder-tree" notation view.
-*   **Engine Analysis:** Integrated UCI engine support (Stockfish) with deep analysis mode and visual evaluation.
-*   **Engine Manager:** Download and manage chess engines directly within the app.
+*   **Comprehensive Database Management:**
+    *   Store, manage, create, and import your chess game databases (PGN files).
+    *   Games within databases now persist across application sessions.
+    *   **Save & Load:** Save the current game to a selected database or as a standalone PGN file.
+    *   **"Trash" Functionality:** Delete databases safely, moving PGN files to a recoverable trash folder.
+*   **Enhanced Lichess Integration:**
+    *   **Persistent Background Download:** Import games from Lichess that download in the background and are automatically saved as new, persistent databases.
+*   **Advanced Engine Management:**
+    *   **Installed Engines GUI:** Visually manage and select from your downloaded engines.
+    *   **Smart Detection:** The Engine Manager intelligently detects and lists only executable engine files.
+*   **Intuitive Game Navigation:**
+    *   **Keyboard Navigation:** Navigate game moves quickly using arrow keys (previous, next, first, last move).
+    *   **Revamped PGN Notation:** Clear, paragraph-style notation view with intelligent handling of variations for optimal readability.
+*   **Powerful Analysis Tools:**
+    *   **Dynamic Engine Analysis:** Integrated UCI engine support with intelligent score normalization (always from White's perspective).
+    *   **Database Explorer:** Analyze current board positions against your collected games, showing move statistics, win rates, and top games from selected databases.
+    *   **Opening Prep & Comparison Tool:**
+        -   Compare your game history ("Hero") against an opponent's ("Opponent") in any opening.
+        -   Generates "Likely Scenarios" (move sequences) based on historical probabilities.
+        -   Ranks scenarios by "Opportunity Score," highlighting lines where you perform well and your opponent is likely to play into your strengths.
+        -   Clickable game counts to load example games for quick review.
+        -   "Play Line" feature to instantly add a full scenario's move sequence to your current game.
 *   **Modern UI:** Clean, dark-themed interface powered by Tailwind CSS.
 
 ## Getting Started
