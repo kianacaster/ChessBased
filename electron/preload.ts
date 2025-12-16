@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onEngineDownloadError: (callback: (data: { engineId: string, error: string }) => void) => {
     ipcRenderer.on('engine-download-error', (event, data) => callback(data));
   },
+  getInstalledEngines: () => ipcRenderer.invoke('get-installed-engines'),
 
   // Database & Persistent Lichess
   lichessDownloadBackground: (username: string, filters: any) => ipcRenderer.invoke('lichess-download-background', username, filters),

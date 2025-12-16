@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Download, Cpu, Trash2, Check, AlertCircle, Play, Square, Loader2 } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
 import type { EngineMetadata } from '../types/app';
+import { Download, Loader2, Cpu, Check } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface EngineManagerProps {
@@ -10,6 +10,7 @@ interface EngineManagerProps {
 
 const EngineManager: React.FC<EngineManagerProps> = ({ onEngineSelected, currentEnginePath }) => {
   const [availableEngines, setAvailableEngines] = useState<EngineMetadata[]>([]);
+  const [installedEngines, setInstalledEngines] = useState<{ name: string; path: string }[]>([]);
   const [downloadProgress, setDownloadProgress] = useState<{ [id: string]: number }>({});
   const [downloadStatus, setDownloadStatus] = useState<{ [id: string]: string }>({});
   const [downloadError, setDownloadError] = useState<{ [id: string]: string }>({});
@@ -20,6 +21,10 @@ const EngineManager: React.FC<EngineManagerProps> = ({ onEngineSelected, current
       window.electronAPI.getAvailableEngines().then(engines => {
         setAvailableEngines(engines);
         setLoadingEngines(false);
+      });
+      
+      window.electronAPI.getInstalledEngines().then(engines => {
+          setInstalledEngines(engines);
       });
 
       window.electronAPI.onEngineDownloadProgress((data) => {
@@ -47,6 +52,8 @@ const EngineManager: React.FC<EngineManagerProps> = ({ onEngineSelected, current
         if (path) {
           onEngineSelected(path);
           setDownloadStatus(prev => ({ ...prev, [engineId]: 'Download and selection complete!' }));
+          // Refresh installed list
+          window.electronAPI.getInstalledEngines().then(engines => setInstalledEngines(engines));
         } else {
           setDownloadError(prev => ({ ...prev, [engineId]: 'Download failed or cancelled.' }));
           setDownloadStatus(prev => ({ ...prev, [engineId]: 'Download failed or cancelled.' }));
@@ -64,6 +71,12 @@ const EngineManager: React.FC<EngineManagerProps> = ({ onEngineSelected, current
       onEngineSelected(path);
     }
   }, [onEngineSelected]);
+  
+  const isInstalled = (engine: EngineMetadata) => {
+      // Check if any installed engine matches the executable name
+      // engine.executableName e.g. "stockfish" or "stockfish.exe"
+      return installedEngines.some(e => e.name === engine.executableName || e.name.startsWith(engine.executableName.split('.')[0]));
+  };
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground p-8 overflow-y-auto">
@@ -90,6 +103,34 @@ const EngineManager: React.FC<EngineManagerProps> = ({ onEngineSelected, current
             </button>
           </div>
         </div>
+        
+        {installedEngines.length > 0 && (
+            <div className="mb-10">
+              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide text-xs">Installed Engines</h3>
+              <div className="bg-card rounded-lg shadow-sm border border-border divide-y divide-border">
+                  {installedEngines.map((engine, i) => (
+                      <div key={i} className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors">
+                          <div className="flex flex-col">
+                             <span className="font-medium text-sm">{engine.name}</span>
+                             <span className="text-xs text-muted-foreground truncate max-w-md">{engine.path}</span>
+                          </div>
+                          <button 
+                             onClick={() => onEngineSelected(engine.path)}
+                             className={clsx(
+                                 "px-3 py-1.5 rounded-md text-xs font-medium transition-colors border",
+                                 currentEnginePath === engine.path 
+                                    ? "bg-green-500/10 text-green-500 border-green-500/20 cursor-default" 
+                                    : "bg-background hover:bg-accent text-foreground border-border"
+                             )}
+                             disabled={currentEnginePath === engine.path}
+                          >
+                             {currentEnginePath === engine.path ? 'Active' : 'Select'}
+                          </button>
+                      </div>
+                  ))}
+              </div>
+            </div>
+        )}
 
         <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide text-xs">Available for Download</h3>
         {loadingEngines ? (
@@ -99,22 +140,25 @@ const EngineManager: React.FC<EngineManagerProps> = ({ onEngineSelected, current
           </div>
         ) : (
           <div className="grid gap-4">
-            {availableEngines.map(engine => (
+            {availableEngines.map(engine => {
+              const installed = isInstalled(engine);
+              return (
               <div key={engine.id} className="bg-card p-6 rounded-lg shadow-sm border border-border hover:border-primary/50 transition-colors">
                 <div className="flex items-start justify-between">
                   <div>
                     <h4 className="text-lg font-semibold text-foreground flex items-center">
                       {engine.name} 
                       <span className="ml-2 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-mono">v{engine.version}</span>
+                      {installed && <span className="ml-2 text-green-500 text-xs flex items-center"><Check className="w-3 h-3 mr-1" /> Installed</span>}
                     </h4>
                     <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{engine.description}</p>
                   </div>
                   <button
                     onClick={() => handleDownload(engine.id)}
-                    disabled={downloadProgress[engine.id] !== undefined && downloadProgress[engine.id] < 100}
+                    disabled={(downloadProgress[engine.id] !== undefined && downloadProgress[engine.id] < 100) || installed}
                     className={clsx(
                       "px-4 py-2 rounded-md font-medium transition-colors flex items-center space-x-2 text-sm",
-                      downloadProgress[engine.id] !== undefined && downloadProgress[engine.id] < 100
+                      (downloadProgress[engine.id] !== undefined && downloadProgress[engine.id] < 100) || installed
                         ? "bg-muted text-muted-foreground cursor-not-allowed"
                         : "bg-primary text-primary-foreground hover:bg-primary/90"
                     )}
@@ -124,6 +168,11 @@ const EngineManager: React.FC<EngineManagerProps> = ({ onEngineSelected, current
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span>{downloadProgress[engine.id]}%</span>
                       </>
+                    ) : installed ? (
+                        <>
+                           <Check className="w-4 h-4" />
+                           <span>Installed</span>
+                        </>
                     ) : (
                       <>
                         <Download className="w-4 h-4" />
@@ -143,7 +192,8 @@ const EngineManager: React.FC<EngineManagerProps> = ({ onEngineSelected, current
                   </div>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>

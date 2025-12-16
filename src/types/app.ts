@@ -64,6 +64,10 @@ export interface IElectronAPI {
   onEngineDownloadProgress: (callback: (data: { engineId: string, progress: number }) => void) => void;
   onEngineDownloadStatus: (callback: (data: { engineId: string, status: string }) => void) => void;
   onEngineDownloadError: (callback: (data: { engineId: string, error: string }) => void) => void;
+<<<<<<< HEAD
+=======
+  getInstalledEngines: () => Promise<{ name: string; path: string }[]>;
+>>>>>>> bug/engine-manager-fix
 
   // Database & Persistent Lichess
   lichessDownloadBackground: (username: string, filters: LichessGameFilter) => Promise<DatabaseEntry>;

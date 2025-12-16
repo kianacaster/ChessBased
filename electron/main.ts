@@ -95,7 +95,7 @@ ipcMain.handle('lichess-download-background', async (event, username: string, fi
                 console.error('Error post-processing lichess download', e);
             }
         })
-        .catch(err => {
+        .catch((err: any) => {
              console.error(`Lichess download for ${username} failed:`, err);
              if (mainWindow) {
                  mainWindow.webContents.send('lichess-download-error', { id: dbEntry.id, error: err.message });
@@ -240,6 +240,41 @@ ipcMain.handle('get-basename', (event, filePath: string) => {
 
 ipcMain.handle('get-available-engines', (): EngineMetadata[] => {
   return AVAILABLE_ENGINES;
+});
+
+ipcMain.handle('get-installed-engines', async () => {
+    const enginesDir = engineDownloader.getEnginesDirectory();
+    
+    async function getFiles(dir: string, depth: number): Promise<{ name: string; path: string }[]> {
+        if (depth > 2) return [];
+        let results: { name: string; path: string }[] = [];
+        try {
+            const list = await fs.readdir(dir);
+            for (const file of list) {
+                const filePath = path.join(dir, file);
+                const stats = await fs.stat(filePath);
+                if (stats && stats.isDirectory()) {
+                    results = results.concat(await getFiles(filePath, depth + 1));
+                } else {
+                    // Filter for likely executables? 
+                    // On Linux, binaries often have no extension. On Windows .exe.
+                    // Let's exclude .zip, .tar, .json, etc if we want, but for now include everything executable-ish?
+                    // Actually, let's just return all files and let frontend/user decide, 
+                    // OR filter by executable permission on Linux?
+                    // Simplest: exclude common non-executable extensions.
+                    const ext = path.extname(file).toLowerCase();
+                    if (!['.zip', '.tar', '.gz', '.tgz', '.rar', '.json', '.txt', '.md'].includes(ext)) {
+                         results.push({ name: file, path: filePath });
+                    }
+                }
+            }
+        } catch (e) {
+            // Ignore errors
+        }
+        return results;
+    }
+
+    return getFiles(enginesDir, 0);
 });
 
 ipcMain.handle('download-engine', async (event, engineId: string) => {
