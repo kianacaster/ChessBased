@@ -389,18 +389,27 @@ export class DatabaseManager {
           return match;
       });
       
-      // if (filtered.length === 0 && games.length > 0) {
-      //    console.log(`[DatabaseManager] Filtered 0 games for move '${move}' at depth ${depth}. Source had ${games.length}.`);
-      //    const sample = games[0];
-      //    let body = sample.pgn.replace(/\{[^}]*\}/g, '').replace(/\([^)]*\)/g, '').replace(/\[[^\\]]*\\]/g, '').replace(/\d+\.+/g, '');
-      //    const tokens = body.trim().split(/\s+/);
-      //    console.log(`[DatabaseManager] Sample tokens: ${tokens.slice(0, depth + 2).join(', ')}`);
-      // }
+      // Extensive Debugging for the 0% issue
+      if (filtered.length === 0 && games.length > 0) {
+         console.log(`[DatabaseManager] _filterByMove FAILED match. Move: '${move}', Depth: ${depth}. Source Games: ${games.length}.`);
+         const sample = games[0];
+         console.log(`[DatabaseManager] Sample PGN Raw (First 100 chars): ${sample.pgn?.substring(0, 100)}`);
+         
+         let body = sample.pgn.replace(/\{[^}]*\}/g, '').replace(/\([^)]*\)/g, '').replace(/\[.*?\\]/gs, '').replace(/\d+\.+/g, '');
+         const tokens = body.trim().split(/\s+/);
+         console.log(`[DatabaseManager] Sample Tokens (First 10): ${tokens.slice(0, 10).join(', ')}`);
+         if (tokens.length > depth) {
+             console.log(`[DatabaseManager] Token at depth ${depth}: '${tokens[depth]}' (Expected: '${move}')`);
+             console.log(`[DatabaseManager] Match check: '${tokens[depth]}' === '${move}' is ${tokens[depth] === move}`);
+         } else {
+             console.log(`[DatabaseManager] Token list length ${tokens.length} <= depth ${depth}`);
+         }
+      }
       
       return filtered;
   }
 
-  public async getPrepScenarios(dbIdsA: string[], dbIdsB: string[], rootMoves: string[], maxDepth: number): Promise<any> {
+  public async getPrepScenarios(dbIdsA: string[], dbIdsB: string[], rootMoves: string[], maxDepth: number = 12): Promise<any> {
       await this.initPromise;
       
       const gamesA = await this._loadGamesFromIds(dbIdsA);
@@ -410,127 +419,185 @@ export class DatabaseManager {
       const rootResA = GameDatabase.filterGames(gamesA, rootMoves);
       const rootResB = GameDatabase.filterGames(gamesB, rootMoves);
       
-      const queue = [{
+      // Queue items now track two probabilities:
+      // prob: Historical probability (what actually happened in DBs)
+      // oppProb: Opportunity probability (likelihood of reaching this if I choose the moves)
+      let queue = [{
           line: [] as string[],
           prob: 1.0,
+          oppProb: 1.0,
           gamesA: rootResA.matchingGames,
           gamesB: rootResB.matchingGames
       }];
       
       const scenarios: any[] = [];
       const rootDepth = rootMoves.length;
+      
+      // Beam Search Width
+      const BEAM_WIDTH = 5;
 
-      while (queue.length > 0) {
-          const current = queue.shift()!;
-          const currentDepth = rootDepth + current.line.length;
+      // Iterative deepening / BFS
+      // Actually, standard BFS is fine if we prune queue.
+      
+      // We process queue by depth layers to apply beam search.
+      // Current queue is depth 0.
+      
+      for (let d = 0; d < maxDepth; d++) {
+          const nextQueue = [];
           
-          if (current.line.length >= maxDepth) {
-              scenarios.push(this._buildScenarioResult(current));
-              continue;
-          }
-          
-          // Determine whose stats to use for probabilities
-          // Even depth (relative to start of game) = White. Odd = Black.
-          // If currentDepth % 2 == 0 (White to move)
-          // We assume Group A is "Hero" (the one we are prepping FOR).
-          // If we are White, we care about A's distribution at depth 0, 2, 4...
-          // If we are Black, we care about A's distribution at depth 1, 3, 5...
-          
-          // Wait, the prompt says: "I play c4 90%... My opponent has played c4 c5 80%".
-          // Me (White) -> A. Opp (Black) -> B.
-          // So White Move -> A. Black Move -> B.
-          // This implies A is White, B is Black.
-          // But if I play Black?
-          // "I type in my name (A) and opponent (B)".
-          // If I am Black, I want A to be Black moves.
-          
-          // Heuristic: We always use A for *even* steps in our tree? 
-          // No, "I play c4" (Move 1). "Opponent plays c5" (Move 1...).
-          // So Move 1 -> A. Move 1... -> B.
-          // This aligns with A=White, B=Black.
-          
-          // What if I am Black?
-          // I set up board 1. e4. (Root length 1).
-          // Next is Black move (Me).
-          // Move 1... -> A.
-          // Move 2 -> B.
-          // So:
-          // A is always "Next move from current state"?
-          // "I play c4 (Move 1)" (A).
-          // If root is empty: Next is Move 1 (White). Use A.
-          // If root is 1. e4: Next is Move 1... (Black). Use A.
-          
-          // So **Side A is always the side to move at ROOT**.
-          // Side B is the response.
-          // Then Side A again.
-          
-          // So: current.line.length % 2 === 0 => A.
-          // current.line.length % 2 === 1 => B.
-          
-          const useA = current.line.length % 2 === 0;
-          const sourceGames = useA ? current.gamesA : current.gamesB;
-          const totalSource = sourceGames.length;
-          
-          if (totalSource === 0) {
-              scenarios.push(this._buildScenarioResult(current));
-              continue;
-          }
+          while (queue.length > 0) {
+              const current = queue.shift()!;
+              const currentDepth = rootDepth + current.line.length;
+              
+              // Determine turn.
+              // We assume Group A is Hero (Me).
+              // If I am White, I move on even plies (0, 2..).
+              // If I am Black, I move on odd plies (1, 3..).
+              // How do we know if Hero is White or Black?
+              // Usually prep is "I am Player X".
+              // If I enter my username, I play both colors.
+              // BUT "Opening Prep" is usually for a specific color context starting from root.
+              // If root is empty, I am White.
+              // If root is 1. e4, I am Black.
+              // So: Hero moves when (rootDepth + line.length) % 2 == (rootDepth % 2).
+              // Wait.
+              // Root [] (0). White to move. Hero moves.
+              // Root ['e4'] (1). Black to move. Hero moves.
+              // So Hero moves when it is the turn of the Root side? Yes.
+              
+              // Wait, if I want to prep against e4 as Black.
+              // I load My games (A) and Opp games (B).
+              // I set board to 1. e4.
+              // It is Black's turn (My turn).
+              // So at depth 0 relative to root, it is My turn.
+              // So **Depth 0 is ALWAYS Hero's turn** in this logic?
+              // No, user said "I play c4... opponent plays c5".
+              // This implies Root is empty. I move first.
+              
+              // So: Even local depth = Hero Move. Odd local depth = Opponent Move.
+              const isHeroTurn = current.line.length % 2 === 0;
+              const sourceGames = isHeroTurn ? current.gamesA : current.gamesB;
+              const totalSource = sourceGames.length;
+              
+              if (totalSource === 0) {
+                  scenarios.push(this._buildScenarioResult(current));
+                  continue;
+              }
 
-          // We need stats for the *next* move.
-          // We can use filterGames on sourceGames with full path.
-          const fullPath = [...rootMoves, ...current.line];
-          const { moveStats } = GameDatabase.filterGames(sourceGames, fullPath);
-          
-          console.log(`Depth ${currentDepth}: Line [${fullPath.join(' ')}]. A: ${current.gamesA.length}, B: ${current.gamesB.length}. Next Moves: ${moveStats.size}`);
-          
-          let hasChildren = false;
-          for (const [san, stats] of moveStats.entries()) {
-              const freq = (stats.w + stats.d + stats.b) / totalSource;
+              const fullPath = [...rootMoves, ...current.line];
+              const { moveStats } = GameDatabase.filterGames(sourceGames, fullPath);
               
-              if (freq < 0.05) continue; // Prune
+              // console.log(`Depth ${currentDepth}: Line [${fullPath.join(' ')}]. A: ${current.gamesA.length}, B: ${current.gamesB.length}. Next Moves: ${moveStats.size}`);
               
-              hasChildren = true;
+              let hasChildren = false;
+              for (const [san, stats] of moveStats.entries()) {
+                  const freq = (stats.w + stats.d + stats.b) / totalSource;
+                  
+                  // Pruning logic
+                  // If Hero Turn: We can choose ANY move, even low freq, if it scores well.
+                  // But we shouldn't explode the tree.
+                  // If Opponent Turn: We only care about high freq responses.
+                  
+                  if (!isHeroTurn && freq < 0.05) continue; // Prune rare opponent moves
+                  // For Hero, we might keep low freq if we want to discover surprises.
+                  // But let's prune extremely rare ones (< 1%) to keep speed.
+                  if (isHeroTurn && freq < 0.01) continue;
+
+                  hasChildren = true;
+                  
+                  const nextLine = [...current.line, san];
+                  const nextGamesA = this._filterByMove(current.gamesA, san, currentDepth);
+                  const nextGamesB = this._filterByMove(current.gamesB, san, currentDepth);
+                  
+                  // Calc new probabilities
+                  // Historical: always multiplies
+                  const newProb = current.prob * freq;
+                  
+                  // Opportunity: Only multiplies on Opponent Turn
+                  let newOppProb = current.oppProb;
+                  if (!isHeroTurn) {
+                      newOppProb *= freq;
+                  }
+                  // If Hero Turn, oppProb stays same (we choose 100%).
+                  
+                  nextQueue.push({
+                      line: nextLine,
+                      prob: newProb,
+                      oppProb: newOppProb,
+                      gamesA: nextGamesA,
+                      gamesB: nextGamesB
+                  });
+              }
               
-              const nextLine = [...current.line, san];
-              // Filter subset for next step
-              // We need to filter BOTH A and B by 'san' at 'currentDepth'
-              const nextGamesA = this._filterByMove(current.gamesA, san, currentDepth);
-              const nextGamesB = this._filterByMove(current.gamesB, san, currentDepth);
-              
-              queue.push({
-                  line: nextLine,
-                  prob: current.prob * freq,
-                  gamesA: nextGamesA,
-                  gamesB: nextGamesB
-              });
+              if (!hasChildren) {
+                  scenarios.push(this._buildScenarioResult(current));
+              }
           }
           
-          if (!hasChildren) {
-              scenarios.push(this._buildScenarioResult(current));
-          }
+          // Apply Beam Search on nextQueue
+          // Sort by "Score". Score = Opportunity Prob * Hero Win Rate.
+          // We need to calc win rate for each candidate to sort.
+          // This is expensive? No, we have nextGamesA.
+          
+          // We only keep the best BEAM_WIDTH branches.
+          
+          nextQueue.sort((a, b) => {
+              const scoreA = this._calcScore(a);
+              const scoreB = this._calcScore(b);
+              return scoreB - scoreA;
+          });
+          
+          queue = nextQueue.slice(0, BEAM_WIDTH * 2); // Keep top 10 per ply to allow diversity
       }
       
-      return scenarios.sort((a, b) => b.probability - a.probability).slice(0, 50);
+      // Add remaining queue items as leaf scenarios
+      for (const item of queue) {
+          scenarios.push(this._buildScenarioResult(item));
+      }
+      
+      // Final Sort for Display
+      return scenarios.sort((a, b) => {
+          // Recalculate scores for final sort
+          // Score = oppProb * winRate
+          // We want to show the user the "Best" lines.
+          const scoreA = a.opportunityProb * this._getWinRate(a.heroStats);
+          const scoreB = b.opportunityProb * this._getWinRate(b.heroStats);
+          return scoreB - scoreA;
+      }).slice(0, 50);
+  }
+
+  private _calcScore(node: any): number {
+      // Score = Opportunity Prob * Hero Win Rate
+      // Win Rate calculation from gamesA
+      const stats = this._getAggStats(node.gamesA);
+      const winRate = this._getWinRate(stats);
+      return node.oppProb * winRate;
+  }
+
+  private _getAggStats(games: GameHeader[]) {
+      let w = 0, d = 0, b = 0;
+      for (const g of games) {
+          if (g.Result === '1-0') w++;
+          else if (g.Result === '0-1') b++;
+          else d++;
+      }
+      return { w, d, b, total: games.length };
+  }
+
+  private _getWinRate(stats: { w: number, d: number, b: number, total: number }): number {
+      if (stats.total === 0) return 0;
+      // Simple win rate: w / total. Or w + d/2.
+      // Let's use W + D/2 for fairness.
+      return (stats.w + 0.5 * stats.d) / stats.total;
   }
 
   private _buildScenarioResult(node: any): any {
-      // Calculate stats for A and B at the end of the line
-      // Simple aggregation
-      const agg = (games: GameHeader[]) => {
-          let w = 0, d = 0, b = 0;
-          games.forEach(g => {
-              if (g.Result === '1-0') w++;
-              else if (g.Result === '0-1') b++;
-              else d++;
-          });
-          return { w, d, b, total: games.length };
-      };
-
       return {
           line: node.line,
           probability: node.prob,
-          heroStats: agg(node.gamesA),
-          opponentStats: agg(node.gamesB)
+          opportunityProb: node.oppProb, // Add this to interface if needed or just use for internal
+          heroStats: this._getAggStats(node.gamesA),
+          opponentStats: this._getAggStats(node.gamesB)
       };
   }
 }
