@@ -51,8 +51,8 @@ const Notation: React.FC<NotationProps> = ({
          >
            <span className="font-semibold text-xs uppercase tracking-wider">Game Start</span>
          </div>
-         <div className="text-sm font-medium leading-6 break-words">
-           <RecursiveTree 
+         <div className="text-sm font-medium leading-relaxed break-words whitespace-normal">
+           <InlineTree 
              nodeId={rootId} 
              nodes={nodes} 
              currentNodeId={currentNodeId} 
@@ -128,67 +128,196 @@ const Notation: React.FC<NotationProps> = ({
   );
 };
 
-// Recursive Component for Vertical Tree View
-const RecursiveTree: React.FC<{
+// Inline Tree for Paragraph View
+
+const InlineTree: React.FC<{
+
   nodeId: string;
+
   nodes: Record<string, TreeNode>;
+
   currentNodeId: string;
+
   onNodeClick: (id: string) => void;
+
   moveNumber: number;
+
   isWhite: boolean;
-  depth?: number;
-}> = ({ nodeId, nodes, currentNodeId, onNodeClick, moveNumber, isWhite, depth = 0 }) => {
+
+  forceShowNumber?: boolean;
+
+}> = ({ nodeId, nodes, currentNodeId, onNodeClick, moveNumber, isWhite, forceShowNumber = false }) => {
+
   const node = nodes[nodeId];
+
   if (!node || node.children.length === 0) return null;
 
-  return (
-    <div className="flex flex-col w-full">
-      {node.children.map((childId, index) => {
-        const child = nodes[childId];
-        if (!child) return null;
-        
-        const label = isWhite 
-          ? `${moveNumber}.` 
-          : `${moveNumber}...`;
 
-        const nextMoveNumber = isWhite ? moveNumber : moveNumber + 1;
 
-        return (
-          <div key={childId} className="flex flex-col">
-            <div 
-              data-node-id={childId}
-              data-active={currentNodeId === childId}
-              className={twMerge(
-                "flex items-center px-2 py-1.5 cursor-pointer transition-colors border-l-2 rounded-r-sm",
-                currentNodeId === childId 
-                  ? "bg-primary/20 text-foreground border-primary" 
-                  : "border-transparent text-foreground hover:bg-muted",
-              )}
-              style={{ paddingLeft: `${depth * 12 + 8}px` }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onNodeClick(childId);
-              }}
-            >
-              <span className="font-mono text-xs text-muted-foreground w-8 inline-block mr-2 text-right shrink-0 select-none">{label}</span>
-              <span className={twMerge("font-semibold", currentNodeId === childId && "text-primary")}>{child.move?.san}</span>
-              {index > 0 && <span className="ml-2 text-xs text-muted-foreground italic">(Var)</span>}
-            </div>
-            
-            <RecursiveTree 
-              nodeId={childId} 
-              nodes={nodes} 
-              currentNodeId={currentNodeId} 
-              onNodeClick={onNodeClick} 
-              moveNumber={nextMoveNumber}
-              isWhite={!isWhite}
-              depth={depth + 1}
-            />
-          </div>
-        );
-      })}
-    </div>
+  const mainChildId = node.children[0];
+
+  const mainChild = nodes[mainChildId];
+
+  const variations = node.children.slice(1);
+
+  
+
+  const label = isWhite ? `${moveNumber}.` : `${moveNumber}...`;
+
+  const nextMoveNumber = isWhite ? moveNumber : moveNumber + 1;
+
+  const showNumber = isWhite || forceShowNumber;
+
+
+
+  const MainMoveElement = (
+
+      <span 
+
+        key={mainChildId}
+
+        data-node-id={mainChildId}
+
+        data-active={currentNodeId === mainChildId}
+
+        className={twMerge(
+
+            "inline-block rounded px-1 py-0.5 cursor-pointer hover:bg-muted transition-colors align-baseline",
+
+            currentNodeId === mainChildId && "bg-primary/20 text-primary font-bold"
+
+        )}
+
+        onClick={(e) => {
+
+            e.stopPropagation();
+
+            onNodeClick(mainChildId);
+
+        }}
+
+      >
+
+        {showNumber && <span className="text-muted-foreground mr-1 font-mono select-none text-xs">{label}</span>}
+
+        <span className="mr-1">{mainChild.move?.san}</span>
+
+      </span>
+
   );
+
+
+
+  return (
+
+    <>
+
+      {MainMoveElement}
+
+      
+
+      {variations.length > 0 && (
+
+          <span className="text-muted-foreground mx-1 align-baseline inline">
+
+              {variations.map(varId => {
+
+                  const varNode = nodes[varId];
+
+                  const varLabel = isWhite ? `${moveNumber}.` : `${moveNumber}...`;
+
+                  // For variation start, always show number? Yes usually.
+
+                  return (
+
+                      <span key={varId} className="inline-block mx-1">
+
+                          (
+
+                          <span 
+
+                            data-node-id={varId}
+
+                            data-active={currentNodeId === varId}
+
+                            className={twMerge(
+
+                                "inline-block rounded px-1 cursor-pointer hover:bg-muted transition-colors",
+
+                                currentNodeId === varId && "bg-primary/20 text-primary font-bold"
+
+                            )}
+
+                            onClick={(e) => {
+
+                                e.stopPropagation();
+
+                                onNodeClick(varId);
+
+                            }}
+
+                          >
+
+                             <span className="text-muted-foreground mr-1 font-mono text-xs">{varLabel}</span>
+
+                             <span>{varNode.move?.san}</span>
+
+                          </span>
+
+                          <InlineTree 
+
+                             nodeId={varId}
+
+                             nodes={nodes}
+
+                             currentNodeId={currentNodeId}
+
+                             onNodeClick={onNodeClick}
+
+                             moveNumber={nextMoveNumber}
+
+                             isWhite={!isWhite}
+
+                          />
+
+                          )
+
+                      </span>
+
+                  );
+
+              })}
+
+          </span>
+
+      )}
+
+
+
+      <InlineTree 
+
+         nodeId={mainChildId}
+
+         nodes={nodes}
+
+         currentNodeId={currentNodeId}
+
+         onNodeClick={onNodeClick}
+
+         moveNumber={nextMoveNumber}
+
+         isWhite={!isWhite}
+
+         forceShowNumber={variations.length > 0 && !isWhite} // If we had variations, and next move is Black, show number (1... e5)
+
+      />
+
+    </>
+
+  );
+
 }
+
+
 
 export default Notation;
