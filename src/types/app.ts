@@ -81,6 +81,7 @@ export interface IElectronAPI {
   dbAddGame: (id: string, pgn: string) => Promise<void>;
   dbDelete: (id: string) => Promise<void>;
   dbSearch: (dbIds: string[], moves: string[]) => Promise<ExplorerResult>;
+  dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => Promise<PrepComparisonResult>;
 }
 
 export interface ExplorerMoveStats {
@@ -98,4 +99,15 @@ export interface ExplorerResult {
   whiteWinPercent: number;
   drawPercent: number;
   blackWinPercent: number;
+}
+
+export interface PrepComparisonResult {
+  statsA: ExplorerResult;
+  statsB: ExplorerResult;
+  // Merged move list for easy rendering
+  moves: {
+    san: string;
+    statsA?: ExplorerMoveStats;
+    statsB?: ExplorerMoveStats;
+  }[];
 }

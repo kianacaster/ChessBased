@@ -8,7 +8,8 @@ import DatabaseList from './components/DatabaseList';
 import DatabaseView from './components/DatabaseView';
 import SaveToDatabaseModal from './components/SaveToDatabaseModal';
 import DatabaseExplorer from './components/DatabaseExplorer';
-import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft, PlusCircle, BookOpen } from 'lucide-react';
+import PrepExplorer from './components/PrepExplorer';
+import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft, PlusCircle, BookOpen, Users } from 'lucide-react';
 import * as React from 'react';
 import { clsx } from 'clsx';
 import { parseUciInfo, type EngineInfo } from './utils/engine';
@@ -51,7 +52,7 @@ function App() {
   const [engineOutput, setEngineOutput] = React.useState<string[]>([]); // Keep raw output for debug if needed
 
   const [currentView, setCurrentView] = React.useState<'board' | 'lichess' | 'engineManager' | 'databases' | 'databaseDetail'>('board');
-  const [analysisTab, setAnalysisTab] = React.useState<'notation' | 'explorer'>('notation');
+  const [analysisTab, setAnalysisTab] = React.useState<'notation' | 'explorer' | 'prep'>('notation');
   const [enginePath, setEnginePath] = React.useState<string | null>(null);
   const [engineDisplayName, setEngineDisplayName] = React.useState<string>('');
   
@@ -245,14 +246,20 @@ function App() {
                   <SidebarItem 
                     icon={LayoutDashboard} 
                     label="My Games" 
-                    active={currentView === 'board'}
-                    onClick={() => setCurrentView('board')}
+                    active={currentView === 'board' && analysisTab === 'notation'}
+                    onClick={() => { setCurrentView('board'); setAnalysisTab('notation'); }}
                   />
                   <SidebarItem 
                     icon={FileText} 
                     label="Databases" 
                     active={currentView === 'databases' || currentView === 'databaseDetail'} 
                     onClick={() => setCurrentView('databases')}
+                  />
+                  <SidebarItem 
+                    icon={Users} 
+                    label="Opening Prep" 
+                    active={currentView === 'board' && analysisTab === 'prep'}
+                    onClick={() => { setCurrentView('board'); setAnalysisTab('prep'); }}
                   />
                 </div>
               </div>
@@ -381,6 +388,16 @@ function App() {
                         <BookOpen size={14} />
                         <span>Explorer</span>
                       </button>
+                      <button 
+                        onClick={() => setAnalysisTab('prep')}
+                        className={clsx(
+                            "px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center space-x-2",
+                            analysisTab === 'prep' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <Users size={14} />
+                        <span>Prep</span>
+                      </button>
                   </div>
                 </div>
                 
@@ -394,21 +411,22 @@ function App() {
                         currentNodeId={currentNode.id}
                         onNodeClick={goToNode} 
                       />
-                  ) : (
+                  ) : analysisTab === 'explorer' ? (
                       <DatabaseExplorer 
                         historySan={history.map(m => m.san)}
                         onPlayMove={(san) => {
-                            // Find move in dests? We need to convert SAN to UCI or find in valid moves.
-                            // useGame doesn't have moveSan.
-                            // But usually, if we just want to navigate, we might need logic.
-                            // For now, let's just log or try to apply if simple.
-                            // Actually, 'move' takes orig, dest. SAN parsing is hard here without library.
-                            // We can rely on user making the move on board.
                             console.log("Play move", san);
                         }}
                         onLoadGame={(pgn) => {
                             loadPgn(pgn);
                             setAnalysisTab('notation');
+                        }}
+                      />
+                  ) : (
+                      <PrepExplorer 
+                        historySan={history.map(m => m.san)}
+                        onPlayMove={(san) => {
+                            console.log("Play move", san);
                         }}
                       />
                   )}

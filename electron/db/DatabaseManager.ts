@@ -308,4 +308,43 @@ export class DatabaseManager {
           blackWinPercent: total ? (b / total) * 100 : 0
       };
   }
+
+  public async compareGames(dbIdsA: string[], dbIdsB: string[], moves: string[]): Promise<any> {
+      const resA = await this.searchGames(dbIdsA, moves);
+      const resB = await this.searchGames(dbIdsB, moves);
+
+      // Merge moves
+      const moveMap = new Map<string, { statsA?: any, statsB?: any }>();
+      
+      resA.moves.forEach((m: any) => {
+          if (!moveMap.has(m.san)) moveMap.set(m.san, {});
+          moveMap.get(m.san)!.statsA = m;
+      });
+      
+      resB.moves.forEach((m: any) => {
+          if (!moveMap.has(m.san)) moveMap.set(m.san, {});
+          moveMap.get(m.san)!.statsB = m;
+      });
+
+      const mergedMoves = Array.from(moveMap.entries()).map(([san, val]) => ({
+          san,
+          statsA: val.statsA,
+          statsB: val.statsB
+      })).sort((a, b) => {
+          // Sort by total games (A + B)
+          const totalA = a.statsA ? a.statsA.total : 0;
+          const totalB = b.statsB ? b.statsB.total : 0;
+          return (totalA + totalB) - (totalA + totalB); // Wait, b - a for descending
+      }).sort((a, b) => {
+           const totalA = (a.statsA ? a.statsA.total : 0) + (a.statsB ? a.statsB.total : 0);
+           const totalB = (b.statsB ? b.statsB.total : 0) + (b.statsB ? b.statsB.total : 0); // Typo in prev logic attempt
+           return totalB - totalA;
+      });
+
+      return {
+          statsA: resA,
+          statsB: resB,
+          moves: mergedMoves
+      };
+  }
 }

@@ -141,6 +141,10 @@ ipcMain.handle('db-search', async (event, dbIds: string[], moves: string[]) => {
     return databaseManager.searchGames(dbIds, moves);
 });
 
+ipcMain.handle('db-compare', async (event, dbIdsA: string[], dbIdsB: string[], moves: string[]) => {
+    return databaseManager.compareGames(dbIdsA, dbIdsB, moves);
+});
+
 ipcMain.handle('open-pgn-file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],

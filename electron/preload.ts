@@ -46,4 +46,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbAddGame: (id: string, pgn: string) => ipcRenderer.invoke('db-add-game', id, pgn),
   dbDelete: (id: string) => ipcRenderer.invoke('db-delete', id),
   dbSearch: (dbIds: string[], moves: string[]) => ipcRenderer.invoke('db-search', dbIds, moves),
+  dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => ipcRenderer.invoke('db-compare', dbIdsA, dbIdsB, moves),
 });
