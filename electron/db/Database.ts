@@ -10,6 +10,7 @@ export interface GameHeader {
   Result: string;
   pgn: string; // The full PGN of this game (headers + moves)
   moves?: string[]; // Cached moves for fast searching
+  eco?: string; // ECO classification of the opening
   [key: string]: string | string[] | undefined; // Allow other tags
 }
 
@@ -48,6 +49,10 @@ export class GameDatabase {
             
             const moves = body.trim().split(/\s+/).filter(m => m && m !== '.');
             currentHeader.moves = moves;
+
+            // Determine ECO
+            const eco = getEco(moves);
+            if (eco) currentHeader.eco = eco;
 
             headers.push(currentHeader as GameHeader);
             currentHeader = {};

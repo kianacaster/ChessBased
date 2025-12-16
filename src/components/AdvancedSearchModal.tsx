@@ -125,6 +125,17 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({ isOpen, onClo
                 </div>
             </div>
 
+            <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">ECO Code</label>
+                <input 
+                    type="text" 
+                    className="w-full bg-input border border-border rounded px-2 py-1.5 text-sm"
+                    value={filter.eco || ''}
+                    onChange={e => handleChange('eco', e.target.value)}
+                    placeholder="e.g., B12, C00"
+                />
+            </div>
+
             <div className="flex justify-end space-x-2 pt-2">
                 <button 
                     type="button"

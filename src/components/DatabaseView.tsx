@@ -182,11 +182,9 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ database, onBack, onLoadGam
                             {selectedIndices.size > 0 && selectedIndices.size === filteredGames.length ? <CheckSquare size={16} /> : <Square size={16} />}
                         </button>
                     </th>
-                    <th className="px-6 py-3">White</th>
-                    <th className="px-6 py-3">Black</th>
-                    <th className="px-6 py-3">Result</th>
                     <th className="px-6 py-3">Event</th>
                     <th className="px-6 py-3">Date</th>
+                    <th className="px-6 py-3">ECO</th>
                 </tr>
             </thead>
             <tbody>
@@ -209,6 +207,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ database, onBack, onLoadGam
                         <td className="px-6 py-4">{game.Result}</td>
                         <td className="px-6 py-4 text-muted-foreground">{game.Event}</td>
                         <td className="px-6 py-4 text-muted-foreground">{game.Date}</td>
+                        <td className="px-6 py-4 text-muted-foreground">{game.eco || '-'}</td>
                     </tr>
                 ))}
                 {filteredGames.length === 0 && (

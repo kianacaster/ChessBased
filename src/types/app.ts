@@ -56,6 +56,7 @@ export interface GameFilter {
   result?: '1-0' | '0-1' | '1/2-1/2' | '*';
   minElo?: number;
   maxElo?: number;
+  eco?: string; // ECO code
 }
 
 export interface IElectronAPI {

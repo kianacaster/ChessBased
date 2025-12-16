@@ -1,6 +1,7 @@
 import { parentPort } from 'worker_threads';
 import fs from 'fs';
 import { GameDatabase, GameHeader } from '../db/Database';
+import { getEco } from '../utils/eco-data';
 
 // In-memory cache for the worker
 const loadedDatabases: Map<string, GameHeader[]> = new Map();
@@ -78,6 +79,7 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
             const result = Array.isArray(g.Result) ? g.Result[0] : g.Result;
             const whiteElo = parseInt((Array.isArray(g.WhiteElo) ? g.WhiteElo[0] : g.WhiteElo) || '0');
             const blackElo = parseInt((Array.isArray(g.BlackElo) ? g.BlackElo[0] : g.BlackElo) || '0');
+            const eco = Array.isArray(g.eco) ? g.eco[0] : g.eco;
 
             if (filter.white && !white?.toLowerCase().includes(filter.white.toLowerCase())) return false;
             if (filter.black && !black?.toLowerCase().includes(filter.black.toLowerCase())) return false;
@@ -104,6 +106,8 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
                     if (filter.maxElo && effectiveElo > filter.maxElo) return false;
                 }
             }
+
+            if (filter.eco && !eco?.toLowerCase().includes(filter.eco.toLowerCase())) return false;
             
             return true;
         });
