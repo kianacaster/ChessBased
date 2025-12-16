@@ -323,6 +323,88 @@ const useGame = (): UseGameResult => {
       setCurrentNodeId(curr.id);
   }, [currentNode, nodes]);
 
+  const playSan = useCallback((san: string) => {
+      try {
+          const moveObj = parseSan(chess, san);
+          if (!moveObj) return false;
+          
+          const file = (s: number) => 'abcdefgh'[s & 7];
+          const rank = (s: number) => '12345678'[s >> 3];
+          const from = file(moveObj.from) + rank(moveObj.from);
+          const to = file(moveObj.to) + rank(moveObj.to);
+          const prom = moveObj.promotion || '';
+          
+          return move(from, to + prom);
+      } catch (e) {
+          console.error("playSan failed:", san, e);
+          return false;
+      }
+  }, [chess, move]);
+
+  const playLine = useCallback((sanMoves: string[]) => {
+      // Clone chess state to validate moves without mutating current render state
+      const tempChess = chess.clone();
+      let startId = currentNodeId;
+
+      setNodes(prev => {
+          const nextNodes = { ...prev };
+          let curr = startId;
+          // We need a local chess instance that updates as we traverse/create nodes
+          // But 'tempChess' captured outside is stale if we loop? 
+          // No, tempChess is mutable (Chess class).
+          
+          for (const san of sanMoves) {
+              try {
+                  const moveObj = parseSan(tempChess, san);
+                  if (!moveObj) break;
+                  
+                  const file = (s: number) => 'abcdefgh'[s & 7];
+                  const rank = (s: number) => '12345678'[s >> 3];
+                  const uci = file(moveObj.from) + rank(moveObj.from) + file(moveObj.to) + rank(moveObj.to) + (moveObj.promotion || '');
+                  
+                  const parent = nextNodes[curr];
+                  const foundId = parent.children.find(cid => nextNodes[cid].move?.uci === uci);
+                  
+                  if (foundId) {
+                      curr = foundId;
+                      tempChess.play(moveObj);
+                      continue;
+                  }
+                  
+                  tempChess.play(moveObj);
+                  const newFen = makeFen(tempChess.toSetup());
+                  const newNodeId = generateId();
+                  
+                  const newNode: TreeNode = {
+                      id: newNodeId,
+                      fen: newFen,
+                      move: { uci, san },
+                      children: [],
+                      parentId: curr,
+                      comments: []
+                  };
+                  
+                  nextNodes[curr] = { ...nextNodes[curr], children: [...nextNodes[curr].children, newNodeId] };
+                  nextNodes[newNodeId] = newNode;
+                  curr = newNodeId;
+              } catch (e) {
+                  console.warn("playLine error on move", san, e);
+                  break;
+              }
+          }
+          
+          // Side effect: update current node
+          // We can't call setCurrentNodeId here directly in updater?
+          // Actually we can, but it might trigger re-render. 
+          // Better to use useEffect or just call it after setNodes? 
+          // But we don't know the final ID outside.
+          // Hack: we can schedule the update.
+          setTimeout(() => setCurrentNodeId(curr), 0);
+          
+          return nextNodes;
+      });
+  }, [chess, currentNodeId]);
+
   return { 
     fen: currentNode.fen, 
     turn, 
@@ -340,7 +422,9 @@ const useGame = (): UseGameResult => {
     goBack,
     goForward,
     goToStart,
-    goToEnd
+    goToEnd,
+    playSan,
+    playLine
   };
 };
 

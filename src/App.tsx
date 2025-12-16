@@ -43,7 +43,7 @@ const SidebarItem = ({
 );
 
 function App() {
-  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove, loadPgn, exportPgn, goBack, goForward, goToStart, goToEnd } = useGame();
+  const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove, loadPgn, exportPgn, goBack, goForward, goToStart, goToEnd, playSan, playLine } = useGame();
   
   // Engine State
   const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
@@ -426,7 +426,15 @@ function App() {
                       <PrepExplorer 
                         historySan={history.map(m => m.san)}
                         onPlayMove={(san) => {
-                            console.log("Play move", san);
+                            playSan(san);
+                        }}
+                        onLoadGame={(pgn) => {
+                            loadPgn(pgn);
+                            setAnalysisTab('notation');
+                        }}
+                        onPlayLine={(moves) => {
+                            playLine(moves);
+                            setAnalysisTab('notation');
                         }}
                       />
                   )}

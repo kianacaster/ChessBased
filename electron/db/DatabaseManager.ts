@@ -347,4 +347,190 @@ export class DatabaseManager {
           moves: mergedMoves
       };
   }
+
+  private async _loadGamesFromIds(dbIds: string[]): Promise<GameHeader[]> {
+      let allGames: GameHeader[] = [];
+      for (const id of dbIds) {
+          const db = this.databases.find(d => d.id === id);
+          if (db) {
+              try {
+                  // Optimization: could cache this
+                  const content = await fs.readFile(db.path, 'utf-8');
+                  this.gameDatabase.clearGames();
+                  const headers = await this.gameDatabase.extractHeadersFromPgn(content);
+                  allGames = allGames.concat(headers);
+              } catch (e) {
+                  console.error(`Failed to load db ${db.name}`, e);
+              }
+          }
+      }
+      return allGames;
+  }
+
+  private _filterByMove(games: GameHeader[], move: string, depth: number): GameHeader[] {
+      // Helper to strictly filter games that have 'move' at 'depth'
+      // We can use GameDatabase.filterGames but it tokenizes everything.
+      // Since we already have a subset, maybe it's fine.
+      // Actually, filterGames returns matchingGames.
+      // But filterGames takes a full sequence.
+      // We only know the *next* move is `move`.
+      // The games passed in `games` are assumed to match up to `depth`.
+      // So checking `move` at `depth` is enough.
+      
+      const filtered = games.filter(g => {
+          if (!g.pgn) return false;
+          // We need to tokenize again to find move at specific index.
+          // This is inefficient but safe.
+          // Duplicate tokenization logic from Database.ts for now.
+          let body = g.pgn.replace(/\{[^}]*\}/g, '').replace(/\([^)]*\)/g, '').replace(/\[.*?\]/gs, '').replace(/\d+\.+/g, '');
+          const tokens = body.trim().split(/\s+/);
+          
+          const match = tokens.length > depth && tokens[depth] === move;
+          return match;
+      });
+      
+      // if (filtered.length === 0 && games.length > 0) {
+      //    console.log(`[DatabaseManager] Filtered 0 games for move '${move}' at depth ${depth}. Source had ${games.length}.`);
+      //    const sample = games[0];
+      //    let body = sample.pgn.replace(/\{[^}]*\}/g, '').replace(/\([^)]*\)/g, '').replace(/\[[^\\]]*\\]/g, '').replace(/\d+\.+/g, '');
+      //    const tokens = body.trim().split(/\s+/);
+      //    console.log(`[DatabaseManager] Sample tokens: ${tokens.slice(0, depth + 2).join(', ')}`);
+      // }
+      
+      return filtered;
+  }
+
+  public async getPrepScenarios(dbIdsA: string[], dbIdsB: string[], rootMoves: string[], maxDepth: number): Promise<any> {
+      await this.initPromise;
+      
+      const gamesA = await this._loadGamesFromIds(dbIdsA);
+      const gamesB = await this._loadGamesFromIds(dbIdsB);
+      
+      // Initial Filter to Root
+      const rootResA = GameDatabase.filterGames(gamesA, rootMoves);
+      const rootResB = GameDatabase.filterGames(gamesB, rootMoves);
+      
+      const queue = [{
+          line: [] as string[],
+          prob: 1.0,
+          gamesA: rootResA.matchingGames,
+          gamesB: rootResB.matchingGames
+      }];
+      
+      const scenarios: any[] = [];
+      const rootDepth = rootMoves.length;
+
+      while (queue.length > 0) {
+          const current = queue.shift()!;
+          const currentDepth = rootDepth + current.line.length;
+          
+          if (current.line.length >= maxDepth) {
+              scenarios.push(this._buildScenarioResult(current));
+              continue;
+          }
+          
+          // Determine whose stats to use for probabilities
+          // Even depth (relative to start of game) = White. Odd = Black.
+          // If currentDepth % 2 == 0 (White to move)
+          // We assume Group A is "Hero" (the one we are prepping FOR).
+          // If we are White, we care about A's distribution at depth 0, 2, 4...
+          // If we are Black, we care about A's distribution at depth 1, 3, 5...
+          
+          // Wait, the prompt says: "I play c4 90%... My opponent has played c4 c5 80%".
+          // Me (White) -> A. Opp (Black) -> B.
+          // So White Move -> A. Black Move -> B.
+          // This implies A is White, B is Black.
+          // But if I play Black?
+          // "I type in my name (A) and opponent (B)".
+          // If I am Black, I want A to be Black moves.
+          
+          // Heuristic: We always use A for *even* steps in our tree? 
+          // No, "I play c4" (Move 1). "Opponent plays c5" (Move 1...).
+          // So Move 1 -> A. Move 1... -> B.
+          // This aligns with A=White, B=Black.
+          
+          // What if I am Black?
+          // I set up board 1. e4. (Root length 1).
+          // Next is Black move (Me).
+          // Move 1... -> A.
+          // Move 2 -> B.
+          // So:
+          // A is always "Next move from current state"?
+          // "I play c4 (Move 1)" (A).
+          // If root is empty: Next is Move 1 (White). Use A.
+          // If root is 1. e4: Next is Move 1... (Black). Use A.
+          
+          // So **Side A is always the side to move at ROOT**.
+          // Side B is the response.
+          // Then Side A again.
+          
+          // So: current.line.length % 2 === 0 => A.
+          // current.line.length % 2 === 1 => B.
+          
+          const useA = current.line.length % 2 === 0;
+          const sourceGames = useA ? current.gamesA : current.gamesB;
+          const totalSource = sourceGames.length;
+          
+          if (totalSource === 0) {
+              scenarios.push(this._buildScenarioResult(current));
+              continue;
+          }
+
+          // We need stats for the *next* move.
+          // We can use filterGames on sourceGames with full path.
+          const fullPath = [...rootMoves, ...current.line];
+          const { moveStats } = GameDatabase.filterGames(sourceGames, fullPath);
+          
+          console.log(`Depth ${currentDepth}: Line [${fullPath.join(' ')}]. A: ${current.gamesA.length}, B: ${current.gamesB.length}. Next Moves: ${moveStats.size}`);
+          
+          let hasChildren = false;
+          for (const [san, stats] of moveStats.entries()) {
+              const freq = (stats.w + stats.d + stats.b) / totalSource;
+              
+              if (freq < 0.05) continue; // Prune
+              
+              hasChildren = true;
+              
+              const nextLine = [...current.line, san];
+              // Filter subset for next step
+              // We need to filter BOTH A and B by 'san' at 'currentDepth'
+              const nextGamesA = this._filterByMove(current.gamesA, san, currentDepth);
+              const nextGamesB = this._filterByMove(current.gamesB, san, currentDepth);
+              
+              queue.push({
+                  line: nextLine,
+                  prob: current.prob * freq,
+                  gamesA: nextGamesA,
+                  gamesB: nextGamesB
+              });
+          }
+          
+          if (!hasChildren) {
+              scenarios.push(this._buildScenarioResult(current));
+          }
+      }
+      
+      return scenarios.sort((a, b) => b.probability - a.probability).slice(0, 50);
+  }
+
+  private _buildScenarioResult(node: any): any {
+      // Calculate stats for A and B at the end of the line
+      // Simple aggregation
+      const agg = (games: GameHeader[]) => {
+          let w = 0, d = 0, b = 0;
+          games.forEach(g => {
+              if (g.Result === '1-0') w++;
+              else if (g.Result === '0-1') b++;
+              else d++;
+          });
+          return { w, d, b, total: games.length };
+      };
+
+      return {
+          line: node.line,
+          probability: node.prob,
+          heroStats: agg(node.gamesA),
+          opponentStats: agg(node.gamesB)
+      };
+  }
 }

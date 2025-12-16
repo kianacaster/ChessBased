@@ -82,6 +82,7 @@ export interface IElectronAPI {
   dbDelete: (id: string) => Promise<void>;
   dbSearch: (dbIds: string[], moves: string[]) => Promise<ExplorerResult>;
   dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => Promise<PrepComparisonResult>;
+  dbGetPrepScenarios: (dbIdsA: string[], dbIdsB: string[], rootMoves: string[], depth: number) => Promise<PrepScenario[]>;
 }
 
 export interface ExplorerMoveStats {
@@ -110,4 +111,12 @@ export interface PrepComparisonResult {
     statsA?: ExplorerMoveStats;
     statsB?: ExplorerMoveStats;
   }[];
+}
+
+export interface PrepScenario {
+  line: string[]; // Sequence of moves from root
+  probability: number; // 0-1
+  heroStats: { w: number, d: number, b: number, total: number }; // Stats for the final position (or accumulated?)
+  // Actually, hero stats usually matter for the *result* of the line.
+  opponentStats: { w: number, d: number, b: number, total: number };
 }
