@@ -61,6 +61,16 @@ function App() {
   
   const [selectedDatabase, setSelectedDatabase] = React.useState<DatabaseEntry | null>(null);
   const [showSaveDbModal, setShowSaveDbModal] = React.useState(false);
+  
+  // Explorer State (Lifted for persistence)
+  const [explorerDbIds, setExplorerDbIds] = React.useState<Set<string>>(new Set());
+
+  const handleExplorerDbToggle = (id: string) => {
+      const next = new Set(explorerDbIds);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setExplorerDbIds(next);
+  };
 
   // Load engine path on startup
   React.useEffect(() => {
@@ -488,6 +498,8 @@ function App() {
                             loadPgn(pgn);
                             setAnalysisTab('notation');
                         }}
+                        selectedDbIds={explorerDbIds}
+                        onToggleDb={handleExplorerDbToggle}
                       />
                   ) : (
                       <PrepExplorer 

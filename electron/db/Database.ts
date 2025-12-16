@@ -9,7 +9,8 @@ export interface GameHeader {
   Black: string;
   Result: string;
   pgn: string; // The full PGN of this game (headers + moves)
-  [key: string]: string; // Allow other tags
+  moves?: string[]; // Cached moves for fast searching
+  [key: string]: string | string[] | undefined; // Allow other tags
 }
 
 export class GameDatabase {
@@ -30,7 +31,24 @@ export class GameDatabase {
     // Helper to push current game
     const pushGame = () => {
         if (Object.keys(currentHeader).length > 0) {
-            currentHeader.pgn = currentGameLines.join('\n');
+            const fullPgn = currentGameLines.join('\n');
+            currentHeader.pgn = fullPgn;
+            
+            // Pre-parse moves for optimization
+            // Simple tokenization
+            let body = fullPgn.replace(/\[.*?\]/gs, ''); // Remove headers block if any inside text (usually not if logic is sound)
+            // Remove comments { ... }
+            body = body.replace(/\{[^}]*\}/g, '');
+            // Remove variations ( ... ) - simplistic
+            body = body.replace(/\([^)]*\)/g, '');
+            // Remove move numbers "1." "1..."
+            body = body.replace(/\d+\.+/g, '');
+            // Remove results
+            body = body.replace(/(1-0|0-1|1\/2-1\/2|\*)/g, '');
+            
+            const moves = body.trim().split(/\s+/).filter(m => m && m !== '.');
+            currentHeader.moves = moves;
+
             headers.push(currentHeader as GameHeader);
             currentHeader = {};
             currentGameLines = [];
@@ -61,13 +79,6 @@ export class GameDatabase {
          }
       } 
       
-      // Always add line to current game PGN
-      // Note: We might want to be careful about where the split happened, 
-      // but assuming we are just reconstructing, adding the line is safe.
-      // However, the logic above for "new game detection" relies on `!inHeaders`.
-      // If we have a file with multiple games, we need to ensure we don't accidentally merge them 
-      // if there are blank lines between games.
-      
       currentGameLines.push(line);
     }
     
@@ -94,29 +105,17 @@ export class GameDatabase {
       const moveStats = new Map<string, { w: number, d: number, b: number }>();
 
       for (const game of games) {
-          if (!game.pgn) continue;
+          // Use pre-parsed moves if available
+          if (!game.moves) continue;
 
-          // Simple tokenization
-          // Remove comments { ... }
-          let body = game.pgn.replace(/\{[^}]*\}/g, '');
-          // Remove variations ( ... ) - nested variations need recursive removal, simplistic for now
-          // A robust PGN parser handles this, but for "starts with", simplistic regex might fail on complex nested comments.
-          // Let's rely on basic stripping.
-          body = body.replace(/\([^)]*\)/g, '');
-          // Remove tag pairs if any left (shouldn't be in pgn body usually if split correctly)
-          body = body.replace(/\[[^\]]*\]/g, '');
-          // Remove move numbers "1." "1..."
-          body = body.replace(/\d+\.+/g, '');
-          
-          const tokens = body.trim().split(/\s+/);
-          
           // Check if game starts with 'moves'
           let match = true;
-          if (tokens.length < moves.length) {
+          if (game.moves.length < moves.length) {
               match = false;
           } else {
+              // Fast array comparison
               for (let i = 0; i < moves.length; i++) {
-                  if (tokens[i] !== moves[i]) {
+                  if (game.moves[i] !== moves[i]) {
                       match = false;
                       break;
                   }
@@ -127,19 +126,17 @@ export class GameDatabase {
               matchingGames.push(game);
               
               // Record next move if exists
-              if (tokens.length > moves.length) {
-                  const nextMove = tokens[moves.length];
-                  // Filter out results like 1-0, 0-1, 1/2-1/2, *
-                  if (!['1-0', '0-1', '1/2-1/2', '*'].includes(nextMove)) {
-                      if (!moveStats.has(nextMove)) {
-                          moveStats.set(nextMove, { w: 0, d: 0, b: 0 });
-                      }
-                      const stats = moveStats.get(nextMove)!;
-                      
-                      if (game.Result === '1-0') stats.w++;
-                      else if (game.Result === '0-1') stats.b++;
-                      else stats.d++;
+              if (game.moves.length > moves.length) {
+                  const nextMove = game.moves[moves.length];
+                  
+                  if (!moveStats.has(nextMove)) {
+                      moveStats.set(nextMove, { w: 0, d: 0, b: 0 });
                   }
+                  const stats = moveStats.get(nextMove)!;
+                  
+                  if (game.Result === '1-0') stats.w++;
+                  else if (game.Result === '0-1') stats.b++;
+                  else stats.d++;
               }
           }
       }

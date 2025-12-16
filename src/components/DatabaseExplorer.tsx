@@ -7,11 +7,12 @@ interface DatabaseExplorerProps {
   historySan: string[]; // List of SAN moves from start
   onPlayMove?: (san: string) => void;
   onLoadGame?: (pgn: string) => void;
+  selectedDbIds: Set<string>;
+  onToggleDb: (id: string) => void;
 }
 
-const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayMove, onLoadGame }) => {
+const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayMove, onLoadGame, selectedDbIds, onToggleDb }) => {
   const [databases, setDatabases] = useState<DatabaseEntry[]>([]);
-  const [selectedDbIds, setSelectedDbIds] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<ExplorerResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [showDbSelector, setShowDbSelector] = useState(false);
@@ -21,14 +22,15 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
     if (window.electronAPI) {
         window.electronAPI.dbGetList().then(dbs => {
             setDatabases(dbs);
-            // Default select all? Or none? Let's select all initially
-            setSelectedDbIds(new Set(dbs.map(d => d.id)));
         });
     }
   }, []);
 
   useEffect(() => {
-    if (!window.electronAPI || selectedDbIds.size === 0) return;
+    if (!window.electronAPI || selectedDbIds.size === 0) {
+        setResult(null);
+        return;
+    }
     
     setLoading(true);
     // Debounce?
@@ -46,13 +48,6 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
 
     return () => clearTimeout(timer);
   }, [historySan, selectedDbIds]); // Re-run when history changes
-
-  const toggleDb = (id: string) => {
-      const next = new Set(selectedDbIds);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      setSelectedDbIds(next);
-  };
 
   return (
     <div className="flex flex-col h-full bg-background border-l border-border">
@@ -84,7 +79,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
                           <input 
                             type="checkbox" 
                             checked={selectedDbIds.has(db.id)}
-                            onChange={() => toggleDb(db.id)}
+                            onChange={() => onToggleDb(db.id)}
                             className="rounded border-gray-300 text-primary focus:ring-primary"
                           />
                           <span className="truncate">{db.name}</span>

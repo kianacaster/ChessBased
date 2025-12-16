@@ -11,19 +11,84 @@ export interface DatabaseEntry {
   lastModified: number;
 }
 
+import { Worker } from 'worker_threads';
+
 export class DatabaseManager {
   private databases: DatabaseEntry[] = [];
   private configPath: string;
   private gameDatabase: GameDatabase;
   private initPromise: Promise<void>;
-  private dbBaseDir: string; // New member to store the base directory for pgn files
+  private dbBaseDir: string; 
+  // Cache: Map dbId -> GameHeader[] (Main thread cache for UI/Management)
+  // We keep main thread cache for loadDatabaseGames but use Worker for search
+  private loadedDatabases: Map<string, GameHeader[]> = new Map();
+  
+  private worker: Worker | null = null;
+  private pendingRequests: Map<string, { resolve: (val: any) => void, reject: (err: any) => void }> = new Map();
 
   constructor() {
     const userDataPath = app.getPath('userData');
     this.configPath = path.join(userDataPath, 'databases.json');
-    this.dbBaseDir = path.join(userDataPath, 'pgn_data'); // Define the base directory here
+    this.dbBaseDir = path.join(userDataPath, 'pgn_data'); 
     this.gameDatabase = new GameDatabase();
     this.initPromise = this.init();
+    this.initWorker();
+  }
+
+  private initWorker() {
+      // In production (asar), the worker file needs to be unpacked or handled correctly.
+      // Vite electron builder usually puts main files in dist-electron/
+      // We assume searchWorker.js will be next to DatabaseManager.js or in a workers subdir.
+      // Adjust path based on build structure.
+      // For development (ts-node), it might be different.
+      
+      let workerPath = path.join(__dirname, '../workers/searchWorker.js');
+      // Fix for dev environment where it might be .ts if running via ts-node directly (unlikely in this setup)
+      // or if directory structure differs. 
+      // In 'dist-electron', structure is flattened often.
+      
+      // Try to find the worker file
+      // If we are in dist-electron/db/DatabaseManager.js, worker is likely in dist-electron/workers/searchWorker.js
+      
+      if (!require('fs').existsSync(workerPath)) {
+          // Try flat structure
+          workerPath = path.join(__dirname, '../searchWorker.js');
+      }
+      
+      // Fallback for dev if not built yet (won't work with pure node on .ts)
+      
+      console.log(`[DatabaseManager] Initializing worker at ${workerPath}`);
+      
+      try {
+          this.worker = new Worker(workerPath);
+          this.worker.on('message', (message) => {
+              const { type, requestId, result, error } = message;
+              if (this.pendingRequests.has(requestId)) {
+                  const { resolve, reject } = this.pendingRequests.get(requestId)!;
+                  this.pendingRequests.delete(requestId);
+                  if (type === 'error') reject(new Error(error));
+                  else resolve(result);
+              }
+          });
+          this.worker.on('error', (err) => console.error('Worker error:', err));
+          this.worker.on('exit', (code) => {
+              if (code !== 0) console.error(`Worker stopped with exit code ${code}`);
+              this.worker = null;
+          });
+      } catch (e) {
+          console.error("Failed to init worker", e);
+      }
+  }
+
+  private postWorkerMessage(type: string, payload: any): Promise<any> {
+      if (!this.worker) this.initWorker();
+      if (!this.worker) return Promise.reject(new Error("Worker not available"));
+
+      const requestId = crypto.randomUUID();
+      return new Promise((resolve, reject) => {
+          this.pendingRequests.set(requestId, { resolve, reject });
+          this.worker!.postMessage({ type, requestId, payload });
+      });
   }
 
   private async init() {
@@ -342,61 +407,28 @@ export class DatabaseManager {
       }
   }
 
-  public async searchGames(dbIds: string[], moves: string[]): Promise<any> { // return ExplorerResult type if imported, using any to avoid import cycles for now or just inline structure
+  // Optimized Search via Worker
+  public async searchGames(dbIds: string[], moves: string[]): Promise<any> { 
       await this.initPromise;
       
-      let allGames: GameHeader[] = [];
-      
+      const dbPaths: string[] = [];
       for (const id of dbIds) {
           const db = this.databases.find(d => d.id === id);
-          if (db) {
-              try {
-                  // Ensure dbBaseDir exists immediately before trying to access file
-                  await fs.mkdir(this.dbBaseDir, { recursive: true });
-
-                  // We need to load games from file. 
-                  // Optimization: Cache loaded games? For now, read file.
-                  const content = await fs.readFile(db.path, 'utf-8');
-                  // We need a temp instance to parse? Or static method?
-                  // extractHeadersFromPgn is instance method.
-                  // We can reuse this.gameDatabase but it clears games.
-                  // Let's reuse it sequentially.
-                  this.gameDatabase.clearGames();
-                  const headers = await this.gameDatabase.extractHeadersFromPgn(content);
-                  allGames = allGames.concat(headers);
-              } catch (e) {
-                  console.error(`Failed to load db ${db.name} for search`, e);
-              }
-          }
+          if (db) dbPaths.push(db.path);
+      }
+      
+      if (dbPaths.length === 0) {
+          return {
+              games: [],
+              moves: [],
+              totalGames: 0,
+              whiteWinPercent: 0,
+              drawPercent: 0,
+              blackWinPercent: 0
+          };
       }
 
-      const { matchingGames, moveStats } = GameDatabase.filterGames(allGames, moves);
-      
-      // Calculate Aggregates
-      let total = matchingGames.length;
-      let w = 0, d = 0, b = 0;
-      matchingGames.forEach(g => {
-          if (g.Result === '1-0') w++;
-          else if (g.Result === '0-1') b++;
-          else d++;
-      });
-
-      const movesList = Array.from(moveStats.entries()).map(([san, s]) => ({
-          san,
-          white: s.w,
-          draw: s.d,
-          black: s.b,
-          total: s.w + s.d + s.b
-      })).sort((a, b) => b.total - a.total);
-
-      return {
-          games: matchingGames.slice(0, 100), // Limit return
-          moves: movesList,
-          totalGames: total,
-          whiteWinPercent: total ? (w / total) * 100 : 0,
-          drawPercent: total ? (d / total) * 100 : 0,
-          blackWinPercent: total ? (b / total) * 100 : 0
-      };
+      return this.postWorkerMessage('search', { dbPaths, moves });
   }
 
   public async compareGames(dbIdsA: string[], dbIdsB: string[], moves: string[]): Promise<any> {
