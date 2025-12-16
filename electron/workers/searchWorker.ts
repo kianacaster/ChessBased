@@ -6,6 +6,17 @@ import { GameDatabase, GameHeader } from '../db/Database';
 const loadedDatabases: Map<string, GameHeader[]> = new Map();
 const gameDatabase = new GameDatabase();
 
+interface GameFilter {
+  white?: string;
+  black?: string;
+  event?: string;
+  dateStart?: string; // YYYY.MM.DD
+  dateEnd?: string;
+  result?: '1-0' | '0-1' | '1/2-1/2' | '*';
+  minElo?: number;
+  maxElo?: number;
+}
+
 // Handle messages from the main thread
 if (parentPort) {
   parentPort.on('message', async (message) => {
@@ -13,8 +24,8 @@ if (parentPort) {
       const { type, requestId, payload } = message;
 
       if (type === 'search') {
-        const { dbPaths, moves } = payload;
-        const result = await performSearch(dbPaths, moves);
+        const { dbPaths, moves, filter } = payload;
+        const result = await performSearch(dbPaths, moves, filter);
         parentPort?.postMessage({ type: 'search-result', requestId, result });
       } else if (type === 'clear-cache') {
           const { dbPath } = payload;
@@ -36,7 +47,7 @@ if (parentPort) {
   });
 }
 
-async function performSearch(dbPaths: string[], moves: string[]) {
+async function performSearch(dbPaths: string[], moves: string[], filter?: GameFilter) {
     let allGames: GameHeader[] = [];
 
     for (const dbPath of dbPaths) {
@@ -55,6 +66,46 @@ async function performSearch(dbPaths: string[], moves: string[]) {
                 console.error(`Worker failed to load ${dbPath}`, e);
             }
         }
+    }
+
+    // Apply Advanced Filters BEFORE move filtering to reduce set size
+    if (filter) {
+        allGames = allGames.filter(g => {
+            if (filter.white && !g.White?.toLowerCase().includes(filter.white.toLowerCase())) return false;
+            if (filter.black && !g.Black?.toLowerCase().includes(filter.black.toLowerCase())) return false;
+            if (filter.event && !g.Event?.toLowerCase().includes(filter.event.toLowerCase())) return false;
+            if (filter.result && g.Result !== filter.result) return false;
+            
+            if (filter.dateStart || filter.dateEnd) {
+                // Dates in PGN are YYYY.MM.DD
+                const gameDate = g.Date || '';
+                if (filter.dateStart && gameDate < filter.dateStart) return false;
+                if (filter.dateEnd && gameDate > filter.dateEnd) return false;
+            }
+
+            if (filter.minElo || filter.maxElo) {
+                const whiteElo = parseInt(g.WhiteElo || '0');
+                const blackElo = parseInt(g.BlackElo || '0');
+                const avgElo = (whiteElo + blackElo) / 2; // Approximate or check both? Usually filtering by player strength.
+                // Let's check if *either* player matches requirements or average? 
+                // Standard behavior: Games where AT LEAST ONE player meets criteria? Or BOTH?
+                // Usually "Games with White > X" is specific.
+                // If just "Min Elo", typically implies average or min of both.
+                // Let's go with: Average Elo must be in range (if both exist), or Single Elo if one exists.
+                
+                let effectiveElo = 0;
+                if (whiteElo && blackElo) effectiveElo = (whiteElo + blackElo) / 2;
+                else if (whiteElo) effectiveElo = whiteElo;
+                else if (blackElo) effectiveElo = blackElo;
+                
+                if (effectiveElo > 0) {
+                    if (filter.minElo && effectiveElo < filter.minElo) return false;
+                    if (filter.maxElo && effectiveElo > filter.maxElo) return false;
+                }
+            }
+            
+            return true;
+        });
     }
 
     const { matchingGames, moveStats } = GameDatabase.filterGames(allGames, moves);

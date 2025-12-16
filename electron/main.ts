@@ -173,8 +173,8 @@ ipcMain.handle('db-remove-games', async (event, id: string, gameIndices: number[
     return databaseManager.removeGames(id, gameIndices);
 });
 
-ipcMain.handle('db-search', async (event, dbIds: string[], moves: string[]) => {
-    return databaseManager.searchGames(dbIds, moves);
+ipcMain.handle('db-search', async (event, dbIds: string[], moves: string[], filter?: any) => {
+    return databaseManager.searchGames(dbIds, moves, filter);
 });
 
 ipcMain.handle('db-compare', async (event, dbIdsA: string[], dbIdsB: string[], moves: string[]) => {

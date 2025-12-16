@@ -408,7 +408,7 @@ export class DatabaseManager {
   }
 
   // Optimized Search via Worker
-  public async searchGames(dbIds: string[], moves: string[]): Promise<any> { 
+  public async searchGames(dbIds: string[], moves: string[], filter?: any): Promise<any> { 
       await this.initPromise;
       
       const dbPaths: string[] = [];
@@ -428,7 +428,7 @@ export class DatabaseManager {
           };
       }
 
-      return this.postWorkerMessage('search', { dbPaths, moves });
+      return this.postWorkerMessage('search', { dbPaths, moves, filter });
   }
 
   public async compareGames(dbIdsA: string[], dbIdsB: string[], moves: string[]): Promise<any> {

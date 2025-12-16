@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import type { DatabaseEntry, ExplorerResult, GameHeader } from '../types/app';
-import { Database, TrendingUp, BookOpen, Filter } from 'lucide-react';
+import type { DatabaseEntry, ExplorerResult, GameHeader, GameFilter } from '../types/app';
+import { Database, TrendingUp, BookOpen, Filter, Search, X } from 'lucide-react';
 import { clsx } from 'clsx';
+import AdvancedSearchModal from './AdvancedSearchModal';
 
 interface DatabaseExplorerProps {
   historySan: string[]; // List of SAN moves from start
@@ -16,6 +17,10 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
   const [result, setResult] = useState<ExplorerResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [showDbSelector, setShowDbSelector] = useState(false);
+  
+  // Search Filter State
+  const [filter, setFilter] = useState<GameFilter>({});
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
   useEffect(() => {
     // Load available databases
@@ -35,7 +40,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
     setLoading(true);
     // Debounce?
     const timer = setTimeout(() => {
-        window.electronAPI.dbSearch(Array.from(selectedDbIds), historySan)
+        window.electronAPI.dbSearch(Array.from(selectedDbIds), historySan, filter)
             .then(res => {
                 setResult(res);
                 setLoading(false);
@@ -47,27 +52,58 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [historySan, selectedDbIds]); // Re-run when history changes
+  }, [historySan, selectedDbIds, filter]); // Re-run when history or filter changes
+
+  const hasActiveFilter = Object.keys(filter).length > 0 && Object.values(filter).some(v => v !== undefined && v !== '');
 
   return (
     <div className="flex flex-col h-full bg-background border-l border-border">
+      <AdvancedSearchModal 
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        onSearch={setFilter}
+        currentFilter={filter}
+      />
+
       {/* Header / Selector Toggle */}
       <div className="p-3 border-b border-border flex items-center justify-between bg-muted/20">
          <div className="flex items-center space-x-2 text-sm font-semibold">
              <BookOpen size={16} />
              <span>Explorer</span>
          </div>
-         <button 
-           onClick={() => setShowDbSelector(!showDbSelector)}
-           className={clsx(
-               "p-1.5 rounded hover:bg-muted transition-colors",
-               showDbSelector ? "text-primary bg-primary/10" : "text-muted-foreground"
-           )}
-           title="Select Databases"
-         >
-             <Filter size={16} />
-         </button>
+         <div className="flex space-x-1">
+             <button 
+               onClick={() => setIsSearchModalOpen(true)}
+               className={clsx(
+                   "p-1.5 rounded hover:bg-muted transition-colors relative",
+                   hasActiveFilter ? "text-primary bg-primary/10" : "text-muted-foreground"
+               )}
+               title="Advanced Search"
+             >
+                 <Search size={16} />
+                 {hasActiveFilter && <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-primary rounded-full" />}
+             </button>
+             <button 
+               onClick={() => setShowDbSelector(!showDbSelector)}
+               className={clsx(
+                   "p-1.5 rounded hover:bg-muted transition-colors",
+                   showDbSelector ? "text-primary bg-primary/10" : "text-muted-foreground"
+               )}
+               title="Select Databases"
+             >
+                 <Filter size={16} />
+             </button>
+         </div>
       </div>
+      
+      {hasActiveFilter && (
+          <div className="bg-primary/5 px-4 py-2 border-b border-border flex justify-between items-center text-xs">
+              <span className="text-primary font-medium">Active Filter applied</span>
+              <button onClick={() => setFilter({})} className="text-muted-foreground hover:text-foreground">
+                  <X size={14} />
+              </button>
+          </div>
+      )}
 
       {/* DB Selector Panel */}
       {showDbSelector && (

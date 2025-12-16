@@ -47,6 +47,17 @@ export interface LichessGameFilter {
   opening?: boolean;
 }
 
+export interface GameFilter {
+  white?: string;
+  black?: string;
+  event?: string;
+  dateStart?: string; // YYYY.MM.DD
+  dateEnd?: string;
+  result?: '1-0' | '0-1' | '1/2-1/2' | '*';
+  minElo?: number;
+  maxElo?: number;
+}
+
 export interface IElectronAPI {
   openPgnFile: () => Promise<string | null>;
   savePgnFile: (pgnContent: string) => Promise<string | null>;
@@ -80,7 +91,7 @@ export interface IElectronAPI {
   dbRename: (id: string, newName: string) => Promise<void>;
   dbMerge: (sourceIds: string[], newName: string) => Promise<DatabaseEntry>;
   dbRemoveGames: (id: string, gameIndices: number[]) => Promise<void>;
-  dbSearch: (dbIds: string[], moves: string[]) => Promise<ExplorerResult>;
+  dbSearch: (dbIds: string[], moves: string[], filter?: GameFilter) => Promise<ExplorerResult>;
   dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => Promise<PrepScenario[]>;
   dbGetPrepScenarios: (dbIdsA: string[], dbIdsB: string[], moves: string[], limit: number) => Promise<PrepScenario[]>;
   extractPgnHeaders: (pgnContent: string) => Promise<GameHeader | null>;

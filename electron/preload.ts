@@ -48,7 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbRename: (id: string, newName: string) => ipcRenderer.invoke('db-rename', id, newName),
   dbMerge: (sourceIds: string[], newName: string) => ipcRenderer.invoke('db-merge', sourceIds, newName),
   dbRemoveGames: (id: string, gameIndices: number[]) => ipcRenderer.invoke('db-remove-games', id, gameIndices),
-  dbSearch: (dbIds: string[], moves: string[]) => ipcRenderer.invoke('db-search', dbIds, moves),
+  dbSearch: (dbIds: string[], moves: string[], filter?: any) => ipcRenderer.invoke('db-search', dbIds, moves, filter),
   dbCompare: (dbIdsA: string[], dbIdsB: string[], moves: string[]) => ipcRenderer.invoke('db-compare', dbIdsA, dbIdsB, moves),
   dbGetPrepScenarios: (dbIdsA: string[], dbIdsB: string[], rootMoves: string[], depth: number) => ipcRenderer.invoke('db-get-prep-scenarios', dbIdsA, dbIdsB, rootMoves, depth),
   extractPgnHeaders: (pgnContent: string) => ipcRenderer.invoke('db-extract-pgn-headers', pgnContent),
