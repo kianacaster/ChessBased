@@ -2,10 +2,23 @@ import { parentPort } from 'worker_threads';
 import fs from 'fs';
 import { GameDatabase, GameHeader } from '../db/Database';
 import { getEco } from '../utils/eco-data';
+import { Chess } from 'chessops/chess';
+import { parseSan } from 'chessops/san';
+import { makeFen } from 'chessops/fen';
+import { Square } from 'chessops/types';
 
 // In-memory cache for the worker
 const loadedDatabases: Map<string, GameHeader[]> = new Map();
 const gameDatabase = new GameDatabase();
+
+interface MaterialCriteria {
+    white?: { [key: string]: number };
+    black?: { [key: string]: number };
+}
+
+interface PositionCriteria {
+    [square: string]: string;
+}
 
 interface GameFilter {
   white?: string;
@@ -16,7 +29,10 @@ interface GameFilter {
   result?: '1-0' | '0-1' | '1/2-1/2' | '*';
   minElo?: number;
   maxElo?: number;
-  eco?: string; // Add eco to local GameFilter definition
+  eco?: string;
+  
+  material?: MaterialCriteria;
+  position?: PositionCriteria;
 }
 
 // Handle messages from the main thread
@@ -31,8 +47,6 @@ if (parentPort) {
         parentPort?.postMessage({ type: 'search-result', requestId, result });
       } else if (type === 'clear-cache') {
           const { dbPath } = payload;
-          // Find ID by path? Or just clear all? Or pass ID.
-          // Since we cache by path in this simple worker (to avoid ID mapping complexity), we use path.
           if (loadedDatabases.has(dbPath)) {
               loadedDatabases.delete(dbPath);
           }
@@ -47,6 +61,113 @@ if (parentPort) {
         });
     }
   });
+}
+
+// Helper to convert algebraic square (e4) to index (0-63)
+function squareToIndex(sq: string): number {
+    const file = sq.charCodeAt(0) - 97; // 'a' -> 0
+    const rank = sq.charCodeAt(1) - 49; // '1' -> 0
+    return rank * 8 + file;
+}
+
+const ROLE_TO_CHAR: Record<string, 'p'|'n'|'b'|'r'|'q'|'k'> = {
+  pawn: 'p',
+  knight: 'n',
+  bishop: 'b',
+  rook: 'r',
+  queen: 'q',
+  king: 'k'
+};
+
+function getMaterial(chess: Chess) {
+    const material = {
+        white: { p: 0, n: 0, b: 0, r: 0, q: 0, k: 0 },
+        black: { p: 0, n: 0, b: 0, r: 0, q: 0, k: 0 }
+    };
+    
+    for (let i = 0; i < 64; i++) {
+        const piece = chess.board.get(i);
+        if (piece) {
+            const role = piece.role;
+            const char = ROLE_TO_CHAR[role];
+            const color = piece.color; // 'white' | 'black'
+            if (color === 'white') material.white[char]++;
+            else material.black[char]++;
+        }
+    }
+    return material;
+}
+
+function checkAdvancedCriteria(game: GameHeader, filter: GameFilter): boolean {
+    if (!game.moves) return false;
+    
+    // Optimizations:
+    // If searching for "Queen vs Rook" (Endgame), we might only check the end?
+    // But user might want "passed through this position".
+    // Let's do ANY for now.
+    
+    const chess = Chess.default();
+    
+    // Check start position?
+    // Usually people search for developed positions.
+    
+    for (const san of game.moves) {
+         const move = parseSan(chess, san);
+         if (!move) break; 
+         chess.play(move);
+         
+         // Check after every move
+         let matches = true;
+
+         // Check Position
+         if (filter.position) {
+             for (const [sq, pieceCode] of Object.entries(filter.position)) {
+                 const idx = squareToIndex(sq);
+                 const piece = chess.board.get(idx);
+                 
+                 if (!pieceCode) {
+                     // Expect empty?
+                     if (piece) { matches = false; break; }
+                 } else {
+                     if (!piece) { matches = false; break; }
+                     // Code: wP, bN etc.
+                     const color = pieceCode[0] === 'w' ? 'white' : 'black';
+                     const role = pieceCode[1].toLowerCase();
+                     if (piece.color !== color || piece.role !== role) {
+                         matches = false;
+                         break;
+                     }
+                 }
+             }
+         }
+         if (!matches) continue; // Position failed, try next move
+
+         // Check Material
+         if (filter.material) {
+             const currentMat = getMaterial(chess);
+             
+             if (filter.material.white) {
+                 for (const [role, count] of Object.entries(filter.material.white)) {
+                     if (currentMat.white[role as keyof typeof currentMat.white] !== count) {
+                         matches = false; break;
+                     }
+                 }
+             }
+             if (!matches) continue;
+             
+             if (filter.material.black) {
+                 for (const [role, count] of Object.entries(filter.material.black)) {
+                     if (currentMat.black[role as keyof typeof currentMat.black] !== count) {
+                         matches = false; break;
+                     }
+                 }
+             }
+         }
+         
+         if (matches) return true; // Found a position that matches all criteria
+    }
+    
+    return false;
 }
 
 async function performSearch(dbPaths: string[], moves: string[], filter?: GameFilter) {
@@ -70,7 +191,7 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
         }
     }
 
-    // Apply Advanced Filters BEFORE move filtering to reduce set size
+    // Apply Basic Filters
     if (filter) {
         allGames = allGames.filter(g => {
             const white = Array.isArray(g.White) ? g.White[0] : g.White;
@@ -88,15 +209,12 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
             if (filter.result && result !== filter.result) return false;
             
             if (filter.dateStart || filter.dateEnd) {
-                // Dates in PGN are YYYY.MM.DD
                 const gameDate = date || '';
                 if (filter.dateStart && gameDate < filter.dateStart) return false;
                 if (filter.dateEnd && gameDate > filter.dateEnd) return false;
             }
 
             if (filter.minElo || filter.maxElo) {
-                const avgElo = (whiteElo + blackElo) / 2;
-                
                 let effectiveElo = 0;
                 if (whiteElo && blackElo) effectiveElo = (whiteElo + blackElo) / 2;
                 else if (whiteElo) effectiveElo = whiteElo;
@@ -115,17 +233,43 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
     }
 
     const { matchingGames, moveStats } = GameDatabase.filterGames(allGames, moves);
+    
+    // Apply Advanced Filters (Material/Position)
+    let finalGames: GameHeader[] = [];
+    if (filter && (filter.material || filter.position)) {
+        // This is the slow part
+        for (const game of matchingGames) {
+            if (checkAdvancedCriteria(game, filter)) {
+                finalGames.push(game);
+            }
+        }
+    } else {
+        finalGames = matchingGames;
+    }
 
-    // Calculate Aggregates
-    let total = matchingGames.length;
+    // Calculate Aggregates on FINAL set
+    let total = finalGames.length;
     let w = 0, d = 0, b = 0;
-    matchingGames.forEach(g => {
+    finalGames.forEach(g => {
         if (g.Result === '1-0') w++;
         else if (g.Result === '0-1') b++;
         else d++;
     });
 
-    const movesList = Array.from(moveStats.entries()).map(([san, s]) => ({
+    // Move stats should technically be re-calculated based on finalGames if we want accuracy
+    // But `GameDatabase.filterGames` returned stats for `matchingGames` (before advanced filter).
+    // If we filter significantly, the stats for "next moves" might be wrong (showing moves that lead to non-matching games).
+    // So we should re-calculate move stats for finalGames.
+    
+    let finalMoveStats = moveStats;
+    if (filter && (filter.material || filter.position)) {
+        // Re-run simple filter logic just to get stats, but on the filtered set
+        // Actually, we can just do it manually here for the `movesList`
+        const reCalc = GameDatabase.filterGames(finalGames, moves);
+        finalMoveStats = reCalc.moveStats;
+    }
+
+    const movesList = Array.from(finalMoveStats.entries()).map(([san, s]) => ({
         san,
         white: s.w,
         draw: s.d,
@@ -134,7 +278,7 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
     })).sort((a, b) => b.total - a.total);
 
     return {
-        games: matchingGames.slice(0, 100),
+        games: finalGames.slice(0, 100),
         moves: movesList,
         totalGames: total,
         whiteWinPercent: total ? (w / total) * 100 : 0,

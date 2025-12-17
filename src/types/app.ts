@@ -57,6 +57,13 @@ export interface GameFilter {
   minElo?: number;
   maxElo?: number;
   eco?: string; // ECO code
+  
+  // Advanced Search
+  material?: {
+    white?: { [key: string]: number }; // p, n, b, r, q
+    black?: { [key: string]: number };
+  };
+  position?: { [square: string]: string }; // e.g., "e4": "wP"
 }
 
 export interface IElectronAPI {
