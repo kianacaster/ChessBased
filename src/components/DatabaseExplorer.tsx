@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import type { DatabaseEntry, ExplorerResult, GameHeader, GameFilter } from '../types/app';
-import { Database, TrendingUp, BookOpen, Filter, Search, X } from 'lucide-react';
+import type { DatabaseEntry, ExplorerResult, GameFilter } from '../types/app';
+import { BookOpen, Filter, Search, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import AdvancedSearchModal from './AdvancedSearchModal';
 

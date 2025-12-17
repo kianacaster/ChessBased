@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import type { DatabaseEntry, GameHeader } from '../types/app';
-import { ArrowLeft, Search, Trash2, CheckSquare, Square } from 'lucide-react';
+import { ArrowLeft, Search, Trash2, CheckSquare, Square, Grid, List } from 'lucide-react';
 import { clsx } from 'clsx';
+import TournamentCrosstable from './TournamentCrosstable';
 
 interface DatabaseViewProps {
   database: DatabaseEntry;
@@ -17,6 +18,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ database, onBack, onLoadGam
   // Selection
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'crosstable'>('list');
 
   useEffect(() => {
     const loadGames = async () => {
@@ -161,6 +163,29 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ database, onBack, onLoadGam
             </button>
         )}
 
+        <div className="flex bg-muted rounded-lg p-1 mr-2">
+            <button 
+                onClick={() => setViewMode('list')}
+                className={clsx(
+                    "p-1.5 rounded-md transition-all",
+                    viewMode === 'list' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+                title="List View"
+            >
+                <List size={16} />
+            </button>
+            <button 
+                onClick={() => setViewMode('crosstable')}
+                className={clsx(
+                    "p-1.5 rounded-md transition-all",
+                    viewMode === 'crosstable' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+                title="Crosstable View"
+            >
+                <Grid size={16} />
+            </button>
+        </div>
+
         <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input 
@@ -174,6 +199,9 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ database, onBack, onLoadGam
       </div>
 
       <div className="flex-1 overflow-auto">
+        {viewMode === 'crosstable' ? (
+            <TournamentCrosstable games={filteredGames} />
+        ) : (
         <table className="w-full text-sm text-left">
             <thead className="text-xs text-muted-foreground uppercase bg-muted/50 sticky top-0 z-10">
                 <tr>
@@ -219,6 +247,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ database, onBack, onLoadGam
                 )}
             </tbody>
         </table>
+        )}
       </div>
     </div>
   );

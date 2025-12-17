@@ -6,7 +6,7 @@ interface LichessImportProps {
   onImport: (pgn: string) => void;
 }
 
-const LichessImport: React.FC<LichessImportProps> = ({ onImport }) => {
+const LichessImport: React.FC<LichessImportProps> = ({ }) => {
   const [username, setUsername] = useState('');
   const [maxGames, setMaxGames] = useState(10);
   const [rated, setRated] = useState(true);

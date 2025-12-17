@@ -11,7 +11,7 @@ import DatabaseExplorer from './components/DatabaseExplorer';
 import PrepExplorer from './components/PrepExplorer';
 import AnnotationTools from './components/AnnotationTools';
 import DatabaseLibrary from './components/DatabaseLibrary';
-import { Database, FileText, Settings, Play, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, ArrowLeft, PlusCircle, BookOpen, Users, Globe } from 'lucide-react';
+import { Database, FileText, Save, FolderOpen, Download, Cpu, LayoutDashboard, History, Activity, ChevronsUp, PlusCircle, BookOpen, Users, Globe } from 'lucide-react';
 import * as React from 'react';
 import { clsx } from 'clsx';
 import { parseUciInfo, type EngineInfo } from './utils/engine';
@@ -64,7 +64,6 @@ function App() {
   const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
   const [isEngineRunning, setIsEngineRunning] = React.useState(false);
   const [isDeepAnalysis, setIsDeepAnalysis] = React.useState(false);
-  const [engineOutput, setEngineOutput] = React.useState<string[]>([]); // Keep raw output for debug if needed
 
   const [currentView, setCurrentView] = React.useState<'board' | 'lichess' | 'engineManager' | 'databases' | 'databaseDetail' | 'databaseLibrary'>('board');
   const [analysisTab, setAnalysisTab] = React.useState<'notation' | 'explorer' | 'prep'>('notation');
@@ -122,8 +121,6 @@ function App() {
         if (info) {
           setEngineInfo(info);
         }
-        // Also keep raw log for now
-        setEngineOutput(prev => [...prev.slice(-19), output]);
       });
     }
   }, []);

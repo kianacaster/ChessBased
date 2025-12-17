@@ -36,15 +36,6 @@ const DatabaseList: React.FC<DatabaseListProps> = ({ onSelectDatabase }) => {
 
   useEffect(() => {
     loadDatabases();
-    
-    if (window.electronAPI) {
-        const removeListener = window.electronAPI.onLichessDownloadComplete((db) => {
-            setDatabases(prev => {
-                if (prev.find(d => d.id === db.id)) return prev;
-                return [...prev, db];
-            });
-        });
-    }
   }, []);
 
   const handleCreate = async () => {

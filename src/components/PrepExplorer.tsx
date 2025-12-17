@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { PrepComparisonResult, PrepScenario } from '../types/app';
-import { Users, GitBranch, Table, Download, Play, Search, AlertCircle, ArrowRightLeft } from 'lucide-react';
+import { Users, GitBranch, Table, Download, Play, Search, ArrowRightLeft } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface PrepState {
@@ -300,7 +300,6 @@ const PrepExplorer: React.FC<PrepExplorerProps> = ({ historySan, onPlayMove, onL
                           </div>
                           <div className="divide-y divide-border/50">
                               {prepState.scenarios.map((scenario, i) => {
-                                  const winRate = getWinRate(scenario.heroStats);
                                   const games = scenario.heroStats.total;
                                   
                                   return (
