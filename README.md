@@ -8,6 +8,7 @@ A modern, free, open-source chess database and analysis application built with E
     *   Store, manage, create, and import your chess game databases (PGN files).
     *   **Save & Load:** Save the current game to a selected database or as a standalone PGN file.
     *   **Deletion recovery** Delete databases safely, moving PGN files to a recoverable trash folder.
+    *   ** Easy Download ** wide selection of datbases easily available for download through the GUI - including top players, historical tournaments, lichess elite and TCEC games. 
 *   **Lichess Integration:**
     *   **Game downloads:** Import games from Lichess that download in the background and are automatically saved as new, persistent databases.
 *   **Engine Management:**
