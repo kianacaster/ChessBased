@@ -1,6 +1,6 @@
 # ChessBased
 
-A modern, free, open-source chess database and analysis application built with Electron, React, and TypeScript. Inspired by Lichess and ChessBase.
+A modern, free, open-source chess database and analysis application built with Electron, React, and TypeScript. Inspired by Lichess to rival ChessBase.
 
 ## Features
 
