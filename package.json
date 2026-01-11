@@ -1,5 +1,8 @@
 {
   "name": "chessbased",
+  "productName": "ChessBased",
+  "description": "A chess database and analysis application.",
+  "author": "ChessBased Developer <dev@chessbased.app>",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -15,6 +18,28 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "test": "vitest"
+  },
+  "build": {
+    "appId": "com.chessbased.app",
+    "productName": "ChessBased",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Game"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    }
   },
   "dependencies": {
     "adm-zip": "^0.5.16",

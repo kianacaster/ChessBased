@@ -10,6 +10,7 @@ reminder.txt
 
 dist-electron
 dist
+release
 node_modules
 dist-ssr
 *.local
