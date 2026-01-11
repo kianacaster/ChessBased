@@ -1,15 +1,14 @@
 import { app } from 'electron';
-import * as fsPromises from 'fs/promises'; // Use fsPromises for async operations
-import * as fs from 'fs'; // Use fs for sync operations like existsSync, readdirSync, statSync, rmSync
-import { createWriteStream, existsSync } from 'fs';
+import * as fsPromises from 'fs/promises';
+import * as fs from 'fs';
+import { createWriteStream } from 'fs';
 import path from 'path';
 import https from 'https';
 import { platform, arch } from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { AVAILABLE_ENGINES, isEngineArchived } from './engine-metadata'; // Updated import
-import type { EngineMetadata } from './engine-types';
-import AdmZip from 'adm-zip'; // For unzipping .zip files
+import { AVAILABLE_ENGINES, isEngineArchived } from './engine-metadata';
+import AdmZip from 'adm-zip';
 
 const execAsync = promisify(exec);
 
@@ -21,8 +20,8 @@ export class EngineDownloader {
   private constructor() {
     this.appDataPath = app.getPath('userData');
     this.enginesDir = path.join(this.appDataPath, 'engines');
-    if (!fs.existsSync(this.enginesDir)) { // Use fs.existsSync
-      fs.mkdirSync(this.enginesDir, { recursive: true }); // Use fs.mkdirSync
+    if (!fs.existsSync(this.enginesDir)) {
+      fs.mkdirSync(this.enginesDir, { recursive: true });
     }
   }
 
@@ -71,10 +70,8 @@ export class EngineDownloader {
     const downloadPath = path.join(this.enginesDir, fileName);
     console.log(`[EngineDownloader] Download path: ${downloadPath}`);
 
-    // Ensure directory exists
     await fsPromises.mkdir(this.enginesDir, { recursive: true });
 
-    // Download file
     try {
       console.log(`[EngineDownloader] Calling performDownload...`);
       await this.performDownload(downloadUrl, downloadPath, onProgress);
@@ -86,7 +83,6 @@ export class EngineDownloader {
       throw error;
     }
 
-    // Extract if archived
     if (isEngineArchived(engineId)) {
       onStatus('Extracting archive...');
       console.log(`[EngineDownloader] Calling extractArchive...`);
@@ -94,7 +90,6 @@ export class EngineDownloader {
         const extractedPath = await this.extractArchive(downloadPath, engineMetadata.executableName);
         console.log(`[EngineDownloader] extractArchive completed. Extracted path: ${extractedPath}`);
         onStatus('Extraction complete.');
-        // Clean up archive
         fs.rmSync(downloadPath);
         console.log(`[EngineDownloader] Archive removed: ${downloadPath}`);
         return extractedPath;
@@ -105,7 +100,6 @@ export class EngineDownloader {
       }
     } else {
       onStatus('Download complete.');
-      // For non-archived executables, make it executable
       await fsPromises.chmod(downloadPath, 0o755);
       console.log(`[EngineDownloader] Non-archived engine downloaded to: ${downloadPath}`);
       return downloadPath;
@@ -118,12 +112,6 @@ export class EngineDownloader {
     }
 
     return new Promise((resolve, reject) => {
-      // Do not create write stream yet if we might redirect
-      // Wait until we get a 200 OK to open the file stream?
-      // Actually, createWriteStream overwrites. But if we redirect, we recurse. 
-      // The recursive call will handle the stream.
-      // So, we only create the stream if we are proceeding with the download.
-      
       const request = https.get(url, {
         timeout: 15000,
         headers: {
@@ -133,7 +121,6 @@ export class EngineDownloader {
       }, (response) => {
         console.log(`[EngineDownloader] Download: Received response for ${url} with status ${response.statusCode}`);
         
-        // Handle Redirects
         if (response.statusCode && [301, 302, 303, 307, 308].includes(response.statusCode)) {
            const location = response.headers.location;
            if (location) {
@@ -179,7 +166,6 @@ export class EngineDownloader {
             reject(new Error(`Incomplete download: Expected ${totalLength} bytes, got ${downloadedLength} bytes.`));
             return;
           } else if (totalLength === -1 && downloadedLength === 0) {
-            // Check if file is empty
              fsPromises.stat(destination).then(stats => {
                 if(stats.size === 0) {
                     reject(new Error(`Download failed: 0 bytes downloaded.`));
@@ -228,10 +214,10 @@ export class EngineDownloader {
     return new Promise((resolve, reject) => {
       const request = https.get(githubApiUrl, {
         headers: {
-          'User-Agent': 'ElectronApp-ChessBased-Downloader/1.0', // GitHub API requires User-Agent
+          'User-Agent': 'ElectronApp-ChessBased-Downloader/1.0',
           'Accept': 'application/vnd.github.v3+json'
         },
-        timeout: 10000 // 10 seconds timeout for API call
+        timeout: 10000
       }, (response) => {
         let data = '';
         response.on('data', (chunk) => (data += chunk));
@@ -241,7 +227,6 @@ export class EngineDownloader {
               const releaseInfo = JSON.parse(data);
               console.log(`[EngineDownloader] GitHub API: Received release info.`);
 
-              // Determine target asset pattern
               let targetPattern: string | undefined;
               const exactMatchKey = `${osType}-${archType}`;
               if (assetPatterns[exactMatchKey]) {
@@ -249,7 +234,6 @@ export class EngineDownloader {
               } else if (archType === 'x64' && assetPatterns[`${osType}-x64`]) {
                 targetPattern = assetPatterns[`${osType}-x64`];
               }
-              // Fallback for universal mac
               if (!targetPattern && osType === 'darwin' && (archType === 'x64' || archType === 'arm64') && assetPatterns['darwin-universal']) {
                   targetPattern = assetPatterns['darwin-universal'];
               }
@@ -294,7 +278,7 @@ export class EngineDownloader {
       console.log(`[EngineDownloader] Extract: Initializing AdmZip with archive: ${archivePath}`);
       const zip = new AdmZip(archivePath);
       console.log(`[EngineDownloader] Extract: Extracting all to: ${targetDir}`);
-      zip.extractAllTo(targetDir, true); // Overwrite existing files
+      zip.extractAllTo(targetDir, true);
     } else if (archivePath.endsWith('.tar') || archivePath.endsWith('.tar.gz') || archivePath.endsWith('.tgz')) {
       console.log(`[EngineDownloader] Extract: Using tar command for: ${archivePath}`);
       try {
@@ -314,7 +298,7 @@ export class EngineDownloader {
       let entries: string[];
       try {
         entries = fs.readdirSync(dir);
-      } catch (e) {
+      } catch {
         return null;
       }
 
@@ -323,7 +307,7 @@ export class EngineDownloader {
         let stat;
         try {
           stat = fs.statSync(fullPath);
-        } catch (e) {
+        } catch {
           continue;
         }
 
@@ -331,14 +315,12 @@ export class EngineDownloader {
           const found = findExecutable(fullPath);
           if (found) return found;
         } else {
-          // Check for exact match
           if (entry === executableName) {
             console.log(`[EngineDownloader] Extract: Found exact match at: ${fullPath}`);
             return fullPath;
           }
-          // Check for partial match (starts with executableName, ignoring extension logic for simplicity)
           if (entry.toLowerCase().startsWith(executableName.toLowerCase())) {
-             if (stat.size > 100 * 1024) { // > 100KB
+             if (stat.size > 100 * 1024) {
                 console.log(`[EngineDownloader] Extract: Found likely match (starts with ${executableName}) at: ${fullPath}`);
                 return fullPath;
              }
@@ -353,7 +335,7 @@ export class EngineDownloader {
       throw new Error(`Could not find executable '${executableName}' (or reasonable match) in extracted archive.`);
     }
     
-    await fsPromises.chmod(extractedExecutablePath, 0o755); // Use fsPromises.chmod
+    await fsPromises.chmod(extractedExecutablePath, 0o755);
     console.log(`[EngineDownloader] Extract: Made executable: ${extractedExecutablePath}`);
 
     return extractedExecutablePath;

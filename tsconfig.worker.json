@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.electron.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["electron/workers/searchWorker.ts"]
+}

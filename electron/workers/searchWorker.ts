@@ -1,13 +1,9 @@
 import { parentPort } from 'worker_threads';
 import fs from 'fs';
 import { GameDatabase, GameHeader } from '../db/Database';
-import { getEco } from '../utils/eco-data';
 import { Chess } from 'chessops/chess';
 import { parseSan } from 'chessops/san';
-import { makeFen } from 'chessops/fen';
-import { Square } from 'chessops/types';
 
-// In-memory cache for the worker
 const loadedDatabases: Map<string, GameHeader[]> = new Map();
 const gameDatabase = new GameDatabase();
 
@@ -24,7 +20,7 @@ interface GameFilter {
   white?: string;
   black?: string;
   event?: string;
-  dateStart?: string; // YYYY.MM.DD
+  dateStart?: string;
   dateEnd?: string;
   result?: '1-0' | '0-1' | '1/2-1/2' | '*';
   minElo?: number;
@@ -35,7 +31,6 @@ interface GameFilter {
   position?: PositionCriteria;
 }
 
-// Handle messages from the main thread
 if (parentPort) {
   parentPort.on('message', async (message) => {
     try {
@@ -63,10 +58,9 @@ if (parentPort) {
   });
 }
 
-// Helper to convert algebraic square (e4) to index (0-63)
 function squareToIndex(sq: string): number {
-    const file = sq.charCodeAt(0) - 97; // 'a' -> 0
-    const rank = sq.charCodeAt(1) - 49; // '1' -> 0
+    const file = sq.charCodeAt(0) - 97;
+    const rank = sq.charCodeAt(1) - 49;
     return rank * 8 + file;
 }
 
@@ -90,7 +84,7 @@ function getMaterial(chess: Chess) {
         if (piece) {
             const role = piece.role;
             const char = ROLE_TO_CHAR[role];
-            const color = piece.color; // 'white' | 'black'
+            const color = piece.color;
             if (color === 'white') material.white[char]++;
             else material.black[char]++;
         }
@@ -101,36 +95,24 @@ function getMaterial(chess: Chess) {
 function checkAdvancedCriteria(game: GameHeader, filter: GameFilter): boolean {
     if (!game.moves) return false;
     
-    // Optimizations:
-    // If searching for "Queen vs Rook" (Endgame), we might only check the end?
-    // But user might want "passed through this position".
-    // Let's do ANY for now.
-    
     const chess = Chess.default();
-    
-    // Check start position?
-    // Usually people search for developed positions.
     
     for (const san of game.moves) {
          const move = parseSan(chess, san);
          if (!move) break; 
          chess.play(move);
          
-         // Check after every move
          let matches = true;
 
-         // Check Position
          if (filter.position) {
              for (const [sq, pieceCode] of Object.entries(filter.position)) {
                  const idx = squareToIndex(sq);
                  const piece = chess.board.get(idx);
                  
                  if (!pieceCode) {
-                     // Expect empty?
                      if (piece) { matches = false; break; }
                  } else {
                      if (!piece) { matches = false; break; }
-                     // Code: wP, bN etc.
                      const color = pieceCode[0] === 'w' ? 'white' : 'black';
                      const role = pieceCode[1].toLowerCase();
                      if (piece.color !== color || piece.role !== role) {
@@ -140,9 +122,8 @@ function checkAdvancedCriteria(game: GameHeader, filter: GameFilter): boolean {
                  }
              }
          }
-         if (!matches) continue; // Position failed, try next move
+         if (!matches) continue;
 
-         // Check Material
          if (filter.material) {
              const currentMat = getMaterial(chess);
              
@@ -164,7 +145,7 @@ function checkAdvancedCriteria(game: GameHeader, filter: GameFilter): boolean {
              }
          }
          
-         if (matches) return true; // Found a position that matches all criteria
+         if (matches) return true;
     }
     
     return false;
@@ -191,7 +172,6 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
         }
     }
 
-    // Apply Basic Filters
     if (filter) {
         allGames = allGames.filter(g => {
             const white = Array.isArray(g.White) ? g.White[0] : g.White;
@@ -234,10 +214,8 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
 
     const { matchingGames, moveStats } = GameDatabase.filterGames(allGames, moves);
     
-    // Apply Advanced Filters (Material/Position)
     let finalGames: GameHeader[] = [];
     if (filter && (filter.material || filter.position)) {
-        // This is the slow part
         for (const game of matchingGames) {
             if (checkAdvancedCriteria(game, filter)) {
                 finalGames.push(game);
@@ -247,8 +225,7 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
         finalGames = matchingGames;
     }
 
-    // Calculate Aggregates on FINAL set
-    let total = finalGames.length;
+    const total = finalGames.length;
     let w = 0, d = 0, b = 0;
     finalGames.forEach(g => {
         if (g.Result === '1-0') w++;
@@ -256,15 +233,8 @@ async function performSearch(dbPaths: string[], moves: string[], filter?: GameFi
         else d++;
     });
 
-    // Move stats should technically be re-calculated based on finalGames if we want accuracy
-    // But `GameDatabase.filterGames` returned stats for `matchingGames` (before advanced filter).
-    // If we filter significantly, the stats for "next moves" might be wrong (showing moves that lead to non-matching games).
-    // So we should re-calculate move stats for finalGames.
-    
     let finalMoveStats = moveStats;
     if (filter && (filter.material || filter.position)) {
-        // Re-run simple filter logic just to get stats, but on the filtered set
-        // Actually, we can just do it manually here for the `movesList`
         const reCalc = GameDatabase.filterGames(finalGames, moves);
         finalMoveStats = reCalc.moveStats;
     }

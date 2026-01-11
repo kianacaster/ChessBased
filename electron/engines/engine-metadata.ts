@@ -1,4 +1,4 @@
-import { platform, arch } from 'os';
+import { platform } from 'os';
 import type { EngineMetadata } from './engine-types';
 export type { EngineMetadata };
 

@@ -8,12 +8,13 @@
     "dev": "concurrently -k \"npm run dev:vite\" \"npm run electron:wait\"",
     "dev:vite": "vite",
     "electron:wait": "wait-on tcp:5173 && npm run electron:build && cross-env NODE_ENV=development electron .",
-    "electron:build": "tsc -p tsconfig.electron.json && echo '{\"type\":\"commonjs\"}' > dist-electron/package.json",
+    "electron:build": "tsc -p tsconfig.electron.json && esbuild electron/workers/searchWorker.ts --bundle --platform=node --format=cjs --outfile=dist-electron/workers/searchWorker.js && echo '{\"type\":\"commonjs\"}' > dist-electron/package.json",
     "build": "tsc -b && vite build && npm run electron:build",
     "lint": "eslint .",
     "preview": "vite preview",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "test": "vitest"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
@@ -30,6 +31,10 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@tailwindcss/postcss": "^4.1.18",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
+    "@testing-library/user-event": "^14.6.1",
     "@types/adm-zip": "^0.5.7",
     "@types/node": "^24.10.3",
     "@types/react": "^19.2.5",
@@ -40,15 +45,18 @@
     "cross-env": "^7.0.3",
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
+    "esbuild": "^0.27.2",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^27.4.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
+    "vitest": "^4.0.16",
     "wait-on": "^9.0.3"
   }
 }

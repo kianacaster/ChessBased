@@ -14,7 +14,6 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({ isOpen, onClo
   const [filter, setFilter] = useState<GameFilter>(currentFilter);
   const [activeTab, setActiveTab] = useState<'general' | 'board'>('general');
 
-  // Helper for Position Constraints UI
   const [positionConstraint, setPositionConstraint] = useState({ sq: '', piece: 'wP' });
 
   if (!isOpen) return null;
@@ -30,8 +29,9 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({ isOpen, onClo
           const colorMat = currentMat[color] || {};
           
           if (isNaN(num)) {
-              const { [role]: _, ...rest } = colorMat;
-              return { ...prev, material: { ...currentMat, [color]: rest } };
+              const newColorMat = { ...colorMat };
+              delete newColorMat[role];
+              return { ...prev, material: { ...currentMat, [color]: newColorMat } };
           } else {
               return { ...prev, material: { ...currentMat, [color]: { ...colorMat, [role]: num } } };
           }
@@ -49,8 +49,9 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({ isOpen, onClo
 
   const removePositionConstraint = (sq: string) => {
       setFilter(prev => {
-          const { [sq]: _, ...rest } = prev.position || {};
-          return { ...prev, position: rest };
+          const newPosition = { ...prev.position };
+          delete newPosition[sq];
+          return { ...prev, position: newPosition };
       });
   };
 
@@ -197,7 +198,6 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({ isOpen, onClo
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {/* Material Section */}
                     <div>
                         <h4 className="text-sm font-bold mb-2 flex items-center space-x-2">
                             <span>Material Count</span>
@@ -239,7 +239,6 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({ isOpen, onClo
                         </div>
                     </div>
 
-                    {/* Position Section */}
                     <div>
                         <h4 className="text-sm font-bold mb-2 flex items-center space-x-2">
                             <span>Positional Constraints</span>

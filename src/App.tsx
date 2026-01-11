@@ -60,7 +60,6 @@ const SidebarItem = ({
 function App() {
   const { fen, turn, move, dests, history, currentMoveIndex, jumpToMove, nodes, currentNode, goToNode, lastMove, loadPgn, exportPgn, goBack, goForward, goToStart, goToEnd, playSan, playLine, gameMetadata, setNodeComment, setNodeNags, setNodeShapes } = useGame();
   
-  // Engine State
   const [engineInfo, setEngineInfo] = React.useState<EngineInfo | null>(null);
   const [isEngineRunning, setIsEngineRunning] = React.useState(false);
   const [isDeepAnalysis, setIsDeepAnalysis] = React.useState(false);
@@ -73,7 +72,6 @@ function App() {
   const [selectedDatabase, setSelectedDatabase] = React.useState<DatabaseEntry | null>(null);
   const [showSaveDbModal, setShowSaveDbModal] = React.useState(false);
   
-  // Explorer State (Lifted for persistence)
   const [explorerDbIds, setExplorerDbIds] = React.useState<Set<string>>(new Set());
 
   const handleExplorerDbToggle = (id: string) => {
@@ -83,11 +81,10 @@ function App() {
       setExplorerDbIds(next);
   };
   
-  // Prep State (Lifted for persistence)
   const [prepState, setPrepState] = React.useState<PrepState>({
       heroName: '',
       opponentName: '',
-      heroColor: 'white', // Default
+      heroColor: 'white',
       heroDbId: null,
       opponentDbId: null,
       result: null,
@@ -96,7 +93,6 @@ function App() {
       status: ''
   });
 
-  // Load engine path on startup
   React.useEffect(() => {
     if (window.electronAPI) {
       window.electronAPI.getEnginePath().then(fullPath => {
@@ -112,11 +108,9 @@ function App() {
     }
   }, []);
 
-  // Listen for engine output
   React.useEffect(() => {
     if (window.electronAPI) {
       window.electronAPI.onEngineAnalysisUpdate((output) => {
-        // Parse info
         const info = parseUciInfo(output);
         if (info) {
           setEngineInfo(info);
@@ -125,7 +119,6 @@ function App() {
     }
   }, []);
 
-  // React to FEN changes or Engine status changes to update analysis
   React.useEffect(() => {
     if (isEngineRunning && enginePath && window.electronAPI) {
       window.electronAPI.startEngine().then(() => {
@@ -136,10 +129,8 @@ function App() {
     }
   }, [fen, isEngineRunning, enginePath, isDeepAnalysis]);
 
-  // Keyboard navigation
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Avoid interfering with inputs
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
@@ -206,7 +197,6 @@ function App() {
           try {
              await window.electronAPI.dbAddGame(dbId, pgn);
              setShowSaveDbModal(false);
-             // Optional: Show success toast
           } catch (e) {
               console.error("Failed to save to DB", e);
           }
@@ -224,11 +214,6 @@ function App() {
     setCurrentView('board');
   }, []);
 
-  const handleLichessImport = (pgn: string) => {
-    loadPgn(pgn);
-    setCurrentView('board');
-  };
-
   const triggerManualEngineSelection = React.useCallback(async () => {
     if (window.electronAPI) {
       const fullPath = await window.electronAPI.selectEngine();
@@ -236,23 +221,20 @@ function App() {
     }
   }, [handleEngineSelected]);
 
-  // Compute shapes for best move arrow
   const shapes = React.useMemo(() => {
     const result: any[] = [];
     
-    // Engine shapes
     if (engineInfo && engineInfo.pv && engineInfo.pv.length > 0) {
         const bestMove = engineInfo.pv[0];
         if (bestMove.length >= 4) {
             result.push({
               orig: bestMove.substring(0, 2),
               dest: bestMove.substring(2, 4),
-              brush: 'blue' // or 'green'
+              brush: 'blue'
             });
         }
     }
     
-    // User shapes from current node
     if (currentNode.shapes) {
         result.push(...currentNode.shapes);
     }
@@ -261,22 +243,6 @@ function App() {
   }, [engineInfo, currentNode.shapes]);
   
   const handleDraw = (newShapes: DrawShape[]) => {
-      // Filter out engine shapes if they are passed back? 
-      // Chessground sends back ALL shapes on board including those set via props.
-      // We need to differentiate or just save them all?
-      // Actually, we should only save what the user drew.
-      // But Chessground doesn't distinguish. 
-      // However, the `shapes` prop is what renders. `onChange` is triggered when user draws.
-      // If we save everything to the node, next render we get duplicates or infinite loop?
-      
-      // We need to strip out the engine arrow if it's there? 
-      // Or maybe just save them. If user draws over engine arrow, that's fine.
-      // But wait, if engine updates, it adds arrow.
-      // If we save that arrow to node, it becomes permanent. That's bad.
-      
-      // Strategy: Remove the engine arrow from `newShapes` before saving.
-      // Engine arrow is defined by `engineInfo`.
-      
       let shapesToSave = [...newShapes];
       
       if (engineInfo && engineInfo.pv && engineInfo.pv.length >= 4) {
@@ -284,7 +250,6 @@ function App() {
           const engineOrig = bestMove.substring(0, 2);
           const engineDest = bestMove.substring(2, 4);
           
-          // Remove if it matches engine arrow exactly
           shapesToSave = shapesToSave.filter(s => 
               !(s.orig === engineOrig && s.dest === engineDest && s.brush === 'blue')
           );
@@ -407,7 +372,7 @@ function App() {
         main={
           currentView === 'lichess' ? (
             <div className="flex flex-col h-full bg-background">
-              <LichessImport onImport={handleLichessImport} />
+              <LichessImport />
             </div>
           ) : currentView === 'engineManager' ? (
             <EngineManager onEngineSelected={handleEngineSelected} currentEnginePath={enginePath} />
@@ -440,7 +405,6 @@ function App() {
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                   {/* Board controls could go here */}
                 </div>
              </div>
              

@@ -5,14 +5,13 @@ import { UciEngine } from './engine/UciEngine';
 import { GameDatabase, GameHeader } from './db/Database';
 import { LichessService, LichessGameFilter } from './lichess/LichessService';
 import { loadConfig, saveConfig } from './config';
-import { EngineDownloader } from './engines/EngineDownloader'; // Import EngineDownloader
+import { EngineDownloader } from './engines/EngineDownloader';
 import { AVAILABLE_ENGINES } from './engines/engine-metadata';
 import type { EngineMetadata } from './engines/engine-types';
 import { DatabaseManager } from './db/DatabaseManager';
 import { DatabaseDownloader } from './db/DatabaseDownloader';
 import { PUBLIC_DATABASES } from './db/public-databases';
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
@@ -21,7 +20,7 @@ let mainWindow: BrowserWindow | null = null;
 let uciEngine: UciEngine;
 let gameDatabase: GameDatabase;
 let lichessService: LichessService;
-let engineDownloader: EngineDownloader; // Declare engineDownloader
+let engineDownloader: EngineDownloader;
 let databaseManager: DatabaseManager;
 let databaseDownloader: DatabaseDownloader;
 
@@ -48,7 +47,7 @@ app.on('ready', () => {
   createWindow();
 
   const config = loadConfig();
-  const enginePath = config.enginePath || 'stockfish'; // Default to 'stockfish' in PATH
+  const enginePath = config.enginePath || 'stockfish';
 
   uciEngine = new UciEngine({ 
     path: enginePath,
@@ -61,7 +60,7 @@ app.on('ready', () => {
 
   gameDatabase = new GameDatabase();
   lichessService = new LichessService();
-  engineDownloader = EngineDownloader.getInstance(); // Initialize EngineDownloader
+  engineDownloader = EngineDownloader.getInstance();
   databaseManager = new DatabaseManager();
   databaseDownloader = DatabaseDownloader.getInstance(databaseManager);
 });
@@ -99,17 +98,12 @@ ipcMain.handle('fetch-lichess-games', async (event, username: string, filters: L
 });
 
 ipcMain.handle('lichess-download-background', async (event, username: string, filters: LichessGameFilter) => {
-    // 1. Create a database for this download
     const dbName = `lichess_${username}_${Date.now()}`;
-    // We'll let createDatabase create the file path
     const dbEntry = await databaseManager.createDatabase(dbName);
     
-    // 2. Start download in background (don't await completion for the return)
     lichessService.downloadUserGames(username, dbEntry.path, filters)
         .then(async () => {
-            // Success
             console.log(`Lichess download for ${username} completed.`);
-            // Update game count in manager
             try {
                await databaseManager.loadDatabaseGames(dbEntry.id);
                if (mainWindow) {
@@ -187,9 +181,7 @@ ipcMain.handle('db-get-prep-scenarios', async (event, dbIdsA: string[], dbIdsB: 
 
 ipcMain.handle('db-extract-pgn-headers', async (event, pgnContent: string) => {
   try {
-    // GameDatabase.extractHeadersFromPgn takes pgnContent and returns GameHeader[].
-    // Since we only expect one game, we take the first.
-    gameDatabase.clearGames(); // Clear any previous state
+    gameDatabase.clearGames();
     const headers = await gameDatabase.extractHeadersFromPgn(pgnContent);
     return headers.length > 0 ? headers[0] : null;
   } catch (error) {
@@ -269,7 +261,7 @@ ipcMain.handle('select-engine', async () => {
     properties: ['openFile'],
     title: 'Select Chess Engine Executable',
     filters: [
-      { name: 'Executables', extensions: ['exe', ''] }, // 'exe' for Windows, empty for Linux/Mac binaries
+      { name: 'Executables', extensions: ['exe', ''] },
       { name: 'All Files', extensions: ['*'] }
     ]
   });
@@ -278,7 +270,6 @@ ipcMain.handle('select-engine', async () => {
     const newPath = filePaths[0];
     saveConfig({ enginePath: newPath });
     
-    // Restart engine with new path if it was running or just update the instance
     uciEngine.stop();
     uciEngine = new UciEngine({
       path: newPath,
@@ -328,16 +319,13 @@ ipcMain.handle('get-installed-engines', async () => {
                     if (isWindows) {
                         isExecutable = ext === '.exe';
                     } else {
-                        // On Linux/Mac, check for execute permission
                         try {
                             await fs.access(filePath, fs.constants.X_OK);
-                            // Additionally exclude common non-binary extensions to be safe
-                            // (e.g. scripts that might have +x but aren't engines)
                             const ignoredExts = ['.sh', '.bash', '.py', '.js', '.c', '.cpp', '.h', '.hpp', '.o', '.a', '.txt', '.md', '.json', '.xml', '.zip', '.tar', '.gz'];
                             if (!ignoredExts.includes(ext) && !file.startsWith('.')) {
                                 isExecutable = true;
                             }
-                        } catch (err) {
+                        } catch {
                             isExecutable = false;
                         }
                     }
@@ -347,7 +335,7 @@ ipcMain.handle('get-installed-engines', async () => {
                     }
                 }
             }
-        } catch (e) {
+        } catch {
             // Ignore errors
         }
         return results;
@@ -371,8 +359,7 @@ ipcMain.handle('download-engine', async (event, engineId: string) => {
     );
 
     if (downloadedPath) {
-      saveConfig({ enginePath: downloadedPath }); // Automatically set as active
-      // Restart engine with new path
+      saveConfig({ enginePath: downloadedPath });
       uciEngine.stop();
       uciEngine = new UciEngine({
         path: downloadedPath,

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Chess } from 'chessops/chess';
 import { parseUci } from 'chessops/util';
 import { chessgroundDests as toDests } from 'chessops/compat';
@@ -22,7 +22,6 @@ interface UseGameResult {
   currentMoveIndex: number;
   jumpToMove: (index: number) => void;
   loadPgn: (pgn: string) => void;
-  // Tree API
   nodes: Record<string, TreeNode>;
   currentNode: TreeNode;
   goToNode: (id: string) => void;
@@ -37,7 +36,6 @@ interface UseGameResult {
   playSan: (san: string) => boolean;
   playLine: (sanMoves: string[]) => void;
 
-  // Annotation API
   setNodeComment: (id: string, comment: string) => void;
   setNodeNags: (id: string, nags: number[]) => void;
   setNodeShapes: (id: string, shapes: DrawShape[]) => void;
@@ -63,7 +61,6 @@ const useGame = (): UseGameResult => {
     };
   });
   
-  // Initialize rootId and currentNodeId based on the initial nodes
   const [rootId, setRootId] = useState(() => Object.keys(nodes)[0]);
   const [currentNodeId, setCurrentNodeId] = useState(() => Object.keys(nodes)[0]);
   const [gameMetadata, setGameMetadata] = useState<GameHeader | null>(null); 
@@ -98,17 +95,11 @@ const useGame = (): UseGameResult => {
       });
   }, []);
 
-  useEffect(() => {
-    // console.log('Current Node ID:', currentNodeId);
-  }, [currentNodeId]);
-
-
-  // Helper to get path from root to a specific node
   const getPath = useCallback((targetId: string, currentNodes: Record<string, TreeNode>) => {
     const path: TreeNode[] = [];
     let curr: TreeNode | undefined = currentNodes[targetId];
     let depth = 0;
-    while (curr && depth < 1000) { // Safety break
+    while (curr && depth < 1000) {
       path.unshift(curr);
       if (!curr.parentId) break;
       curr = currentNodes[curr.parentId];
@@ -119,13 +110,12 @@ const useGame = (): UseGameResult => {
 
   const currentNode = nodes[currentNodeId] || nodes[rootId];
   
-  // Reconstruct Chess instance from current FEN
   const chess = useMemo(() => {
     try {
       const setup = parseFen(currentNode.fen).unwrap();
       return Chess.fromSetup(setup).unwrap();
-    } catch (e) {
-      console.error("Failed to parse FEN:", currentNode.fen, e);
+    } catch {
+      console.error("Failed to parse FEN:", currentNode.fen);
       return Chess.default();
     }
   }, [currentNode.fen]);
@@ -133,13 +123,11 @@ const useGame = (): UseGameResult => {
   const turn = chess.turn;
   const dests = useMemo(() => toDests(chess), [chess]);
 
-  // Backward compatibility: linear history of the current branch
   const historyPath = useMemo(() => getPath(currentNodeId, nodes), [currentNodeId, nodes, getPath]);
   
-  // history for UI (excludes root, just moves)
   const history = useMemo(() => {
     return historyPath
-      .slice(1) // Remove root
+      .slice(1)
       .map(node => ({
         uci: node.move?.uci || '',
         san: node.move?.san || ''
@@ -167,7 +155,6 @@ const useGame = (): UseGameResult => {
         return false;
     }
 
-    // Check if this move already exists in children
     const existingChildId = currentNode.children.find(childId => {
       const child = nodes[childId];
       return child.move?.uci === uciString;
@@ -178,7 +165,6 @@ const useGame = (): UseGameResult => {
       return true;
     }
 
-    // Create new node
     const san = makeSan(chess, uciMove as NormalMove);
     tempChess.play(uciMove as NormalMove);
     const newFen = makeFen(tempChess.toSetup());
@@ -210,15 +196,13 @@ const useGame = (): UseGameResult => {
   }, [chess, currentNode, currentNodeId, nodes]);
 
   const jumpToMove = useCallback((index: number) => {
-    // Legacy jump: assume we want to jump to the i-th node in the current path
-    // If index is -1, go to root.
     if (index < -1) return;
     if (index === -1) {
       setCurrentNodeId(rootId);
       return;
     }
     
-    const targetNode = historyPath[index + 1]; // +1 because index 0 is the first move (node 1), root is node 0
+    const targetNode = historyPath[index + 1];
     if (targetNode) {
       setCurrentNodeId(targetNode.id);
     }
@@ -238,7 +222,6 @@ const useGame = (): UseGameResult => {
   }, [currentNode]);
 
   const loadPgn = useCallback((pgn: string) => {
-      // Extract headers
       const headerRegex = /\s*\[(\w+)\s+"(.*?)"\]/g;
       let match;
       const headers: any = {};
@@ -247,13 +230,9 @@ const useGame = (): UseGameResult => {
       }
       setGameMetadata(headers as GameHeader);
       
-      // Remove headers for body parsing
       const body = pgn.replace(/\s*\[.*?\]/gs, '');
       
-      // Tokenize body
-      // Matches: {Comment}, $NAG, (, ), Move Number, SAN, Result
-      // Fixed regex for NAGs ($1, $20 etc) and Moves (1. or 1...)
-      const regex = /\{([\s\S]*?)\}|(\$\d+)|\(|\)|(\d+\.+)|([a-zA-Z0-9+=#\-]+)|(\*|1-0|0-1|1\/2-1\/2)/g;
+      const regex = /\{([\s\S]*?)\}|(\$\d+)|\(|\)|(\d+\.+)|([-a-zA-Z0-9+=#]+)|(\*|1-0|0-1|1\/2-1\/2)/g;
       
       const newRootId = generateId();
       const newNodes: Record<string, TreeNode> = {
@@ -269,7 +248,7 @@ const useGame = (): UseGameResult => {
       };
       
       let currentId = newRootId;
-      let currentChess = Chess.default();
+      const currentChess = Chess.default();
       let variationDepth = 0; 
       
       let token;
@@ -281,7 +260,7 @@ const useGame = (): UseGameResult => {
                   let text = comment.trim();
                   const shapes: DrawShape[] = [];
                   
-                  const shapeRegex = /\s*\[%(cal|csl)\s+(.*?)\]/g;
+                  const shapeRegex = /\s*\[% (cal|csl)\s+(.*?) \]/g;
                   let shapeMatch;
                   while ((shapeMatch = shapeRegex.exec(text)) !== null) {
                       const type = shapeMatch[1];
@@ -308,7 +287,7 @@ const useGame = (): UseGameResult => {
                       });
                   }
                   
-                  text = text.replace(/\s*\[%(cal|csl)\s+.*?\]/g, '').trim();
+                  text = text.replace(/\s*\[% (cal|csl)\s+.*? \]/g, '').trim();
                   
                   const node = newNodes[currentId];
                   if (node) {
@@ -363,7 +342,7 @@ const useGame = (): UseGameResult => {
                            newNodes[newNodeId] = newNode;
                            currentId = newNodeId;
                        }
-                  } catch (e) {
+                  } catch {
                       console.warn('Move parse error', san);
                   }
               }
@@ -372,7 +351,7 @@ const useGame = (): UseGameResult => {
       
       setNodes(newNodes);
       setRootId(newRootId);
-      setCurrentNodeId(currentId);
+      setCurrentNodeId(newRootId);
       
   }, []);
 
@@ -471,7 +450,6 @@ const useGame = (): UseGameResult => {
 
   const goToEnd = useCallback(() => {
       let curr = currentNode;
-      // Go to end of main line from current position
       while (curr.children.length > 0) {
           curr = nodes[curr.children[0]];
       }
@@ -498,7 +476,7 @@ const useGame = (): UseGameResult => {
 
   const playLine = useCallback((sanMoves: string[]) => {
       const tempChess = chess.clone();
-      let startId = currentNodeId;
+      const startId = currentNodeId;
 
       setNodes(prev => {
           const nextNodes = { ...prev };
@@ -555,7 +533,7 @@ const useGame = (): UseGameResult => {
     fen: currentNode.fen, 
     turn, 
     move, 
-    dests, 
+    dests,
     history, 
     currentMoveIndex, 
     jumpToMove,

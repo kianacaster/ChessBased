@@ -5,7 +5,7 @@ import { clsx } from 'clsx';
 import AdvancedSearchModal from './AdvancedSearchModal';
 
 interface DatabaseExplorerProps {
-  historySan: string[]; // List of SAN moves from start
+  historySan: string[];
   onPlayMove?: (san: string) => void;
   onLoadGame?: (pgn: string) => void;
   selectedDbIds: Set<string>;
@@ -18,12 +18,10 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
   const [loading, setLoading] = useState(false);
   const [showDbSelector, setShowDbSelector] = useState(false);
   
-  // Search Filter State
   const [filter, setFilter] = useState<GameFilter>({});
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
   useEffect(() => {
-    // Load available databases
     if (window.electronAPI) {
         window.electronAPI.dbGetList().then(dbs => {
             setDatabases(dbs);
@@ -38,7 +36,6 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
     }
     
     setLoading(true);
-    // Debounce?
     const timer = setTimeout(() => {
         window.electronAPI.dbSearch(Array.from(selectedDbIds), historySan, filter)
             .then(res => {
@@ -52,7 +49,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [historySan, selectedDbIds, filter]); // Re-run when history or filter changes
+  }, [historySan, selectedDbIds, filter]);
 
   const hasActiveFilter = Object.keys(filter).length > 0 && Object.values(filter).some(v => v !== undefined && v !== '');
 
@@ -65,7 +62,6 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
         currentFilter={filter}
       />
 
-      {/* Header / Selector Toggle */}
       <div className="p-3 border-b border-border flex items-center justify-between bg-muted/20">
          <div className="flex items-center space-x-2 text-sm font-semibold">
              <BookOpen size={16} />
@@ -105,7 +101,6 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
           </div>
       )}
 
-      {/* DB Selector Panel */}
       {showDbSelector && (
           <div className="p-3 bg-muted/30 border-b border-border text-sm max-h-40 overflow-y-auto">
               <div className="font-medium mb-2 text-xs uppercase text-muted-foreground">Source Databases</div>
@@ -126,7 +121,6 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
           </div>
       )}
 
-      {/* Results Content */}
       <div className="flex-1 overflow-y-auto">
           {loading ? (
               <div className="p-8 text-center text-muted-foreground text-sm">Searching...</div>
@@ -134,7 +128,6 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
               <div className="p-8 text-center text-muted-foreground text-sm">Select databases to explore.</div>
           ) : (
               <div className="flex flex-col">
-                  {/* Stats Summary */}
                   <div className="p-4 border-b border-border">
                       <div className="flex justify-between items-baseline mb-2">
                           <span className="text-2xl font-bold">{result.totalGames}</span>
@@ -152,7 +145,6 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
                       </div>
                   </div>
 
-                  {/* Moves List */}
                   <div className="border-b border-border">
                       <div className="px-4 py-2 bg-muted/10 text-xs font-bold text-muted-foreground uppercase tracking-wider">Candidate Moves</div>
                       <table className="w-full text-sm text-left">
@@ -177,7 +169,6 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ historySan, onPlayM
                       </table>
                   </div>
 
-                  {/* Games List */}
                   <div>
                       <div className="px-4 py-2 bg-muted/10 text-xs font-bold text-muted-foreground uppercase tracking-wider">Top Games</div>
                       <div className="divide-y divide-border/50">

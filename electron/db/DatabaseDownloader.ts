@@ -1,5 +1,4 @@
 import { app } from 'electron';
-import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import path from 'path';
 import https from 'https';
@@ -47,11 +46,9 @@ export class DatabaseDownloader {
 
         if (fileName.toLowerCase().endsWith('.zip')) {
             onStatus('Processing archive...');
-            // Extract
             const zip = new AdmZip(downloadPath);
             const zipEntries = zip.getEntries();
             
-            // Find largest PGN
             let pgnEntry = null;
             let maxBytes = 0;
             
@@ -74,26 +71,19 @@ export class DatabaseDownloader {
             
             finalPgnPath = path.join(extractPath, pgnEntry.entryName);
         } else if (fileName.toLowerCase().endsWith('.pgn')) {
-            // It's already a PGN
             finalPgnPath = downloadPath;
         } else {
-             // Fallback: Check magic number or try to unzip? 
-             // For now assume extension is correct or throw.
              throw new Error('Unsupported file format. Only .zip and .pgn are supported.');
         }
         
         onStatus('Importing into database...');
-        // Add to DatabaseManager
-        // This copies the file to the managed directory
         await this.dbManager.addDatabase(finalPgnPath, dbMeta.name);
 
-        // Cleanup
         onStatus('Cleaning up...');
         if (fileName.toLowerCase().endsWith('.zip')) {
              await fsPromises.rm(downloadPath, { force: true });
              await fsPromises.rm(path.dirname(finalPgnPath), { recursive: true, force: true });
         } else {
-             // If it was a direct PGN download, addDatabase copied it. We can delete the temp one.
              await fsPromises.rm(downloadPath, { force: true });
         }
         
@@ -113,7 +103,6 @@ export class DatabaseDownloader {
         }
       }, (response) => {
         if (response.statusCode && (response.statusCode < 200 || response.statusCode >= 300)) {
-            // Handle redirects if simple, but pgnmentor usually direct.
              if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
                  this.performDownload(response.headers.location, destination, onProgress).then(resolve).catch(reject);
                  return;

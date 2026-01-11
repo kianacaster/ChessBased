@@ -24,6 +24,7 @@ export class DatabaseManager {
   private loadedDatabases: Map<string, GameHeader[]> = new Map();
   
   private worker: Worker | null = null;
+  private workerPath: string = '';
   private pendingRequests: Map<string, { resolve: (val: any) => void, reject: (err: any) => void }> = new Map();
 
   constructor() {
@@ -39,28 +40,22 @@ export class DatabaseManager {
       // In production (asar), the worker file needs to be unpacked or handled correctly.
       // Vite electron builder usually puts main files in dist-electron/
       // We assume searchWorker.js will be next to DatabaseManager.js or in a workers subdir.
-      // Adjust path based on build structure.
-      // For development (ts-node), it might be different.
       
-      let workerPath = path.join(__dirname, '../workers/searchWorker.js');
-      // Fix for dev environment where it might be .ts if running via ts-node directly (unlikely in this setup)
-      // or if directory structure differs. 
-      // In 'dist-electron', structure is flattened often.
+    this.workerPath = path.join(__dirname, '../workers/searchWorker.js');
+    console.log('[DatabaseManager] Initializing worker at', this.workerPath);
+
+      // Fix for dev environment where it might be .ts if running via ts-node directly
+      // or if directory structure differs.
       
-      // Try to find the worker file
-      // If we are in dist-electron/db/DatabaseManager.js, worker is likely in dist-electron/workers/searchWorker.js
-      
-      if (!require('fs').existsSync(workerPath)) {
+      if (!require('fs').existsSync(this.workerPath)) {
           // Try flat structure
-          workerPath = path.join(__dirname, '../searchWorker.js');
+          this.workerPath = path.join(__dirname, '../searchWorker.js');
       }
       
-      // Fallback for dev if not built yet (won't work with pure node on .ts)
-      
-      console.log(`[DatabaseManager] Initializing worker at ${workerPath}`);
+      console.log(`[DatabaseManager] Initializing worker at ${this.workerPath}`);
       
       try {
-          this.worker = new Worker(workerPath);
+          this.worker = new Worker(this.workerPath);
           this.worker.on('message', (message) => {
               const { type, requestId, result, error } = message;
               if (this.pendingRequests.has(requestId)) {

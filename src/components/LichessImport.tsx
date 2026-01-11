@@ -2,11 +2,7 @@ import React, { useState } from 'react';
 import { Download, Loader2, Database } from 'lucide-react';
 import type { LichessGameFilter } from '../types/app';
 
-interface LichessImportProps {
-  onImport: (pgn: string) => void;
-}
-
-const LichessImport: React.FC<LichessImportProps> = ({ }) => {
+const LichessImport: React.FC = () => {
   const [username, setUsername] = useState('');
   const [maxGames, setMaxGames] = useState(10);
   const [rated, setRated] = useState(true);
@@ -37,11 +33,9 @@ const LichessImport: React.FC<LichessImportProps> = ({ }) => {
       };
 
       if (window.electronAPI) {
-          // Start background download
           await window.electronAPI.lichessDownloadBackground(username, filters);
           setSuccessMsg(`Download started for ${username}. Check the Databases tab.`);
       } else {
-          // Fallback for web (if applicable, but this is Electron app)
           setError("Electron API not available");
       }
     } catch (err) {
@@ -59,7 +53,7 @@ const LichessImport: React.FC<LichessImportProps> = ({ }) => {
           <div className="p-2 bg-primary/10 rounded-lg">
             <Download className="w-6 h-6 text-primary" />
           </div>
-          <h2 className="text-2xl font-bold tracking-tight">Download from Lichess</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-sidebar-foreground">Download from Lichess</h2>
         </div>
 
         <div className="space-y-5">
@@ -83,7 +77,7 @@ const LichessImport: React.FC<LichessImportProps> = ({ }) => {
                 value={maxGames}
                 onChange={(e) => setMaxGames(parseInt(e.target.value))}
                 min={1}
-                max={1000} // Increased max for DB download
+                max={1000}
               />
             </div>
              <div>

@@ -42,7 +42,6 @@ const AnnotationTools: React.FC<AnnotationToolsProps> = ({ currentNode, onUpdate
     if (currentNags.includes(nagValue)) {
       newNags = currentNags.filter(n => n !== nagValue);
     } else {
-      // 1-6 are mutually exclusive usually.
       const exclusives = [1, 2, 3, 4, 5, 6];
       if (exclusives.includes(nagValue)) {
           newNags = currentNags.filter(n => !exclusives.includes(n)).concat(nagValue);
