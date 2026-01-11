@@ -1,29 +1,26 @@
 # ChessBased
 
-A modern, free, open-source chess database and analysis application built with Electron, React, and TypeScript. Inspired by Lichess and ChessBase.
+A modern, free, open-source chess database and analysis application built with Electron, React, and TypeScript. Inspired by Lichess to rival ChessBase.
 
 ## Features
 
-*   **Comprehensive Database Management:**
+*   **Database Management:**
     *   Store, manage, create, and import your chess game databases (PGN files).
-    *   Games within databases now persist across application sessions.
     *   **Save & Load:** Save the current game to a selected database or as a standalone PGN file.
-    *   **"Trash" Functionality:** Delete databases safely, moving PGN files to a recoverable trash folder.
-*   **Enhanced Lichess Integration:**
-    *   **Persistent Background Download:** Import games from Lichess that download in the background and are automatically saved as new, persistent databases.
-*   **Advanced Engine Management:**
+    *   **Deletion recovery** Delete databases safely, moving PGN files to a recoverable trash folder.
+    *   ** Easy Download ** wide selection of datbases easily available for download through the GUI - including top players, historical tournaments, lichess elite and TCEC games. 
+*   **Lichess Integration:**
+    *   **Game downloads:** Import games from Lichess that download in the background and are automatically saved as new, persistent databases.
+*   **Engine Management:**
     *   **Installed Engines GUI:** Visually manage and select from your downloaded engines.
     *   **Smart Detection:** The Engine Manager intelligently detects and lists only executable engine files.
-*   **Intuitive Game Navigation:**
-    *   **Keyboard Navigation:** Navigate game moves quickly using arrow keys (previous, next, first, last move).
-    *   **Revamped PGN Notation:** Clear, paragraph-style notation view with intelligent handling of variations for optimal readability.
-*   **Powerful Analysis Tools:**
-    *   **Dynamic Engine Analysis:** Integrated UCI engine support with intelligent score normalization (always from White's perspective).
+*   **Analysis Tools:**
+    *   **Engine Analysis:** Integrated UCI engine support
     *   **Database Explorer:** Analyze current board positions against your collected games, showing move statistics, win rates, and top games from selected databases.
+    *       - Databases can be searched by ECO, pieces, players, dates, tournaments
     *   **Opening Prep & Comparison Tool:**
         -   Compare your game history ("Hero") against an opponent's ("Opponent") in any opening.
-        -   Generates "Likely Scenarios" (move sequences) based on historical probabilities.
-        -   Ranks scenarios by "Opportunity Score," highlighting lines where you perform well and your opponent is likely to play into your strengths.
+        -   Generates "Likely Scenarios" (move sequences) based on both repertoires.
         -   Clickable game counts to load example games for quick review.
         -   "Play Line" feature to instantly add a full scenario's move sequence to your current game.
 *   **Modern UI:** Clean, dark-themed interface powered by Tailwind CSS.
@@ -39,7 +36,7 @@ A modern, free, open-source chess database and analysis application built with E
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/kianacaster/chessbased.git
+    git clone https://github.com/kianacaster/ChessBased.git
     cd chessbased
     ```
 
